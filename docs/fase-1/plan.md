@@ -251,7 +251,7 @@ Durante toda la construcción la red de este entorno bloqueó `api.the-odds-api.
 | # | Estado | Cómo comprobarlo |
 |---|---|---|
 | F1 | Cumplido | `uv sync --locked && uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy` |
-| F2 | Cumplido: CI en verde (calidad + gitleaks) en el HEAD revisado, `c9384af` (ejecución 9). Se vuelve a comprobar tras cada push. El token del entorno sí permitió subir el workflow | Pestaña Actions del repositorio |
+| F2 | Cumplido: F2 confirmado en `435507e` (ejecución 10); `18a1ce0`, con el test de petición lenta, en verde (ejecución 11). Calidad + gitleaks. El token del entorno sí permitió subir el workflow | Pestaña Actions del repositorio |
 | F3 | Cumplido | `tests/unit/test_devig.py` |
 | F4 | Cumplido | `tests/unit/test_value.py`, `tests/unit/test_classify.py` |
 | F5 | Cumplido | `tests/unit/test_reference.py`, `tests/integration/test_scan_service.py`, `tests/integration/test_cli.py` |
@@ -285,16 +285,15 @@ reescribir historia (commit `f29fdfe`).
    instante más antiguo posible y nunca presenta un dato como más reciente de lo que es. La
    antigüedad que comparan `max_quote_age_minutes` y `max_reference_age_minutes` se mide contra
    `provider_last_update`, y solo si falta, contra `captured_at`. La caché conserva el
-   `captured_at` original: está cubierta por un test. No hay test de «petición lenta»; queda
-   propuesto, pendiente de OK, en [ADR 006](../decisiones/006-hora-de-captura-y-antiguedad.md). Las
-   cuotas reutilizadas se guardan otra vez, enlazadas a la petición `from_cache = 1`.
+   `captured_at` original. Las cuotas reutilizadas se guardan otra vez, enlazadas a la petición
+   `from_cache = 1`. **ADR 006 cerrado, sin hueco declarado**: la petición lenta tiene sus tests
+   (`18a1ce0`), citados por nombre en [ADR 006](../decisiones/006-hora-de-captura-y-antiguedad.md).
 3. `power_exponent` y `shin_z` se exponen para que los tests puedan fijar k y z.
 4. Las peticiones del modo offline se registran con `http_status` NULL, así que nunca sirven
    como caché, y `--offline` usa una base en memoria salvo que se pase `--db`.
 5. Toda oportunidad lleva el motivo «liquidez desconocida» (ADR 001). **Interpretación
-   provisional:** aviso y no descarte, porque The Odds API no expone liquidez ni límites; la regla
-   «descartar por liquidez o límite bajo» queda pendiente de tu confirmación. Si se descartara,
-   hoy no habría ningún pick.
+   provisional, confirmada por el usuario el 2026-10-21:** aviso y no descarte, porque The Odds API
+   no expone liquidez ni límites. Se revisará cuando haya un proveedor que sí los dé.
 6. `tipster scan` admite `--competicion` (repetible) y `--max-creditos`. Códigos de salida:
    0 (completa o parcial), 1 (error del proveedor) y 2 (configuración).
 7. La CLI se escribió con Rich (incluido en Typer): la tabla necesita un terminal ancho
@@ -306,11 +305,12 @@ reescribir historia (commit `f29fdfe`).
   (`670d4ed`, Sección 0) + 7 (Fase 0, `317bd61`…`da0c568`) + 1 (`2b3994c`) + 2 (`a372366`,
   `dd17795`) + 32 (Fase 1, `dfe2ebd`…`c9384af`) = 43. El informe anterior decía «30» para la Fase 1:
   era un error y son 32. Este commit de revisión suma uno más.
-- **gitleaks y licencias:** el CLI de gitleaks es MIT (`LICENSE` de
-  github.com/gitleaks/gitleaks). La acción `gitleaks/gitleaks-action` usada en la CI tiene licencia
-  propia (`LICENSE.txt`, «GITLEAKS-ACTION END-USER LICENSE AGREEMENT»): exige una *License Key*
-  para repositorios de organizaciones y no para cuentas personales. De ahí sale la nota del
-  workflow, que se mantiene.
+- **gitleaks y licencias** (nota del workflow mantenida, confirmado por el usuario):
+  - CLI: `LICENSE` de github.com/gitleaks/gitleaks (etiqueta v8.30.1): «MIT License · Copyright
+    (c) 2019 Zachary Rice». No necesita licencia.
+  - Acción usada en la CI: `LICENSE.txt` de github.com/gitleaks/gitleaks-action (etiqueta
+    v3.0.0): «GITLEAKS-ACTION END-USER LICENSE AGREEMENT». Exige *License Key* para repositorios
+    de una *Organization Account* y no para los de una *Personal Account*, como este.
 - **Segunda «saltada» en offline:** no es un fallo de mapeo ni un hallazgo sobre el proveedor. El
   `sports.json` sintético solo lista LaLiga y Premier, a propósito, para probar el camino de
   competición no listada. Si The Odds API cubre la Segunda (y con qué clave) es parte de R4.

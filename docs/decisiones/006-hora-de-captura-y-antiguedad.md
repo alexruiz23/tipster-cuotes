@@ -1,6 +1,6 @@
 # 006 — Hora de captura y antigüedad de las cuotas
 
-**Estado:** Aceptada por implementación en la Fase 1, pendiente de tu revisión · **Fecha:** 2026-10-21
+**Estado:** Aceptada (2026-10-21) · **Fecha:** 2026-10-21
 
 ## Contexto
 
@@ -35,7 +35,12 @@ decide los descartes.
   prudente: puede descartar de más, nunca de menos.
 - La reutilización desde la caché sí envejece la cuota, que es lo correcto: el dato es el de la
   petición original.
-- **Hueco de tests:** la caché que conserva la hora original está cubierta
-  (`test_acierto_de_cache_no_llama_ni_gasta_y_conserva_la_hora_original`), pero no hay un test de
-  «petición lenta» que fije qué instante se guarda cuando la respuesta tarda. Queda propuesto,
-  pendiente de tu OK, porque es código nuevo.
+- **Tests** (`tests/integration/test_http_client.py`):
+  - `test_acierto_de_cache_no_llama_ni_gasta_y_conserva_la_hora_original`: la caché conserva el
+    `captured_at` original.
+  - `test_peticion_lenta_sin_last_update_la_antiguedad_cubre_toda_la_duracion`: con una petición de
+    30 s y sin `provider_last_update`, `captured_at` es el inicio del intento y la antigüedad nunca
+    es menor que la duración real. Una mutación que guarda el fin de la petición hace fallar este
+    test.
+  - `test_peticion_lenta_con_last_update_mide_contra_el_proveedor`: con `provider_last_update`, la
+    antigüedad se mide contra el proveedor y no contra `captured_at`.
