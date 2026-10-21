@@ -95,10 +95,14 @@ def test_scan_offline_produce_los_picks_calculados_a_mano(conn: sqlite3.Connecti
         ("Local Prueba FC", "winamax_fr", "mas", "VALUE", "pinnacle"),
         ("Ciudad Ficticia CF", "888sport_no_es", "local", "VALUE", "betfair_ex_no_es"),
     }
-    evs = {
-        (p.opportunity.quote.bookmaker_id, p.opportunity.quote.selection): p for p in result.picks
+    ev = {
+        (p.opportunity.event.home_team, p.opportunity.quote.bookmaker_id): p.opportunity.ev
+        for p in result.picks
+        if p.opportunity.quote.selection == "local"
     }
-    assert evs[("888sport_no_es", "local")].opportunity.ev == pytest.approx(9 / 145, abs=1e-9)
+    assert ev[("Local Prueba FC", "888sport_no_es")] == pytest.approx(9 / 145, abs=1e-9)
+    # Referencia Betfair 2.04 / 3.55 / 4.10 → p_local = 0.482578 → 2.15 × p − 1 ≈ +3.75 %.
+    assert ev[("Ciudad Ficticia CF", "888sport_no_es")] == pytest.approx(0.0375402, abs=1e-6)
     assert all(not p.opportunity.feed_es for p in result.picks)
     assert result.status == "ok"
 
