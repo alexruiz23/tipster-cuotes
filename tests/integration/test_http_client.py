@@ -235,3 +235,11 @@ def test_intervalo_minimo_entre_peticiones(tmp_path: Path) -> None:
     time.mono += 0.25
     client.get_json(ENDPOINT, {"markets": "h2h"}, estimated_cost=1)
     assert time.sleeps == [pytest.approx(0.75)]
+
+
+def test_sin_cabecera_de_coste_se_cobra_la_estimacion(tmp_path: Path) -> None:
+    budget = CreditBudget(30)
+    client = _client(lambda r: httpx.Response(200, json=[]), tmp_path, budget=budget)
+    result = client.get_json(ENDPOINT, PARAMS, estimated_cost=2)
+    assert result.record.cost is None
+    assert budget.spent == 2
