@@ -1,5 +1,10 @@
 """Jerarquía de excepciones del proyecto. Todas heredan de `TipsterError`."""
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from tipster.providers.base import RequestRecord
+
 
 class TipsterError(Exception):
     """Error base de tipster-cuotes."""
@@ -18,7 +23,11 @@ class DevigError(TipsterError, ValueError):
 
 
 class ProviderError(TipsterError):
-    """Error base de un proveedor de cuotas."""
+    """Error base de un proveedor de cuotas. `record` describe la petición fallida, si la hubo."""
+
+    def __init__(self, message: str, record: "RequestRecord | None" = None) -> None:
+        super().__init__(message)
+        self.record = record
 
 
 class ProviderAuthError(ProviderError):
