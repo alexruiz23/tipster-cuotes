@@ -1,0 +1,21 @@
+[
+  {
+    "id": "sint-epl-001",
+    "sport_key": "soccer_epl",
+    "sport_title": "EPL",
+    "commence_time": "2026-10-24T14:00:00Z",
+    "home_team": "Ejemplo United",
+    "away_team": "Muestra Town",
+    "bookmakers": [
+      {"key": "pinnacle", "title": "Pinnacle", "last_update": "2026-10-21T17:40:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:40:00Z", "outcomes": [
+          {"name": "Ejemplo United", "price": 1.8}, {"name": "Muestra Town", "price": 4.5}, {"name": "Draw", "price": 3.8}]}]},
+      {"key": "betfair_ex_eu", "title": "Betfair", "last_update": "2026-10-21T17:41:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:41:00Z", "outcomes": [
+          {"name": "Ejemplo United", "price": 1.82}, {"name": "Muestra Town", "price": 4.6}, {"name": "Draw", "price": 3.85}]}]},
+      {"key": "sport888", "title": "888sport", "last_update": "2026-10-21T17:59:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:59:00Z", "outcomes": [
+          {"name": "Ejemplo United", "price": 2.1}, {"name": "Muestra Town", "price": 4.0}, {"name": "Draw", "price": 3.5}]}]}
+    ]
+  }
+]

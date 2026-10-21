@@ -1,0 +1,52 @@
+[
+  {
+    "id": "sint-laliga-001",
+    "sport_key": "soccer_spain_la_liga",
+    "sport_title": "La Liga - Spain",
+    "commence_time": "2026-10-25T19:00:00Z",
+    "home_team": "Local Prueba FC",
+    "away_team": "Visitante Prueba CF",
+    "bookmakers": [
+      {"key": "pinnacle", "title": "Pinnacle", "last_update": "2026-10-21T17:58:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:58:00Z", "outcomes": [
+          {"name": "Local Prueba FC", "price": 2.0}, {"name": "Visitante Prueba CF", "price": 4.0}, {"name": "Draw", "price": 3.5}]},
+        {"key": "totals", "last_update": "2026-10-21T17:58:00Z", "outcomes": [
+          {"name": "Over", "price": 1.9, "point": 2.5}, {"name": "Under", "price": 2.0, "point": 2.5}]}]},
+      {"key": "sport888", "title": "888sport", "last_update": "2026-10-21T17:57:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:57:00Z", "outcomes": [
+          {"name": "Local Prueba FC", "price": 2.2}, {"name": "Visitante Prueba CF", "price": 3.9}, {"name": "Draw", "price": 3.4}]}]},
+      {"key": "williamhill", "title": "William Hill", "last_update": "2026-10-21T17:59:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:59:00Z", "outcomes": [
+          {"name": "Local Prueba FC", "price": 2.4}, {"name": "Visitante Prueba CF", "price": 3.8}, {"name": "Draw", "price": 3.3}]}]},
+      {"key": "marathonbet", "title": "Marathon Bet", "last_update": "2026-10-21T17:45:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:45:00Z", "outcomes": [
+          {"name": "Local Prueba FC", "price": 2.25}, {"name": "Visitante Prueba CF", "price": 3.7}, {"name": "Draw", "price": 3.3}]}]},
+      {"key": "winamax_fr", "title": "Winamax (FR)", "last_update": "2026-10-21T17:58:30Z", "markets": [
+        {"key": "totals", "outcomes": [
+          {"name": "Over", "price": 2.05, "point": 2.5}, {"name": "Under", "price": 1.8, "point": 2.5},
+          {"name": "Over", "price": 1.7, "point": 2.25}, {"name": "Under", "price": 2.15, "point": 2.25}]}]},
+      {"key": "casa_desconocida", "title": "Casa desconocida", "last_update": "2026-10-21T17:58:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:58:00Z", "outcomes": [
+          {"name": "Local Prueba FC", "price": 2.5}, {"name": "Visitante Prueba CF", "price": 3.0}, {"name": "Draw", "price": 3.0}]}]}
+    ]
+  },
+  {
+    "id": "sint-laliga-002",
+    "sport_key": "soccer_spain_la_liga",
+    "sport_title": "La Liga - Spain",
+    "commence_time": "2026-10-26T16:15:00Z",
+    "home_team": "Ciudad Ficticia CF",
+    "away_team": "Atlético Inventado",
+    "bookmakers": [
+      {"key": "pinnacle", "title": "Pinnacle", "last_update": "2026-10-21T17:58:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:58:00Z", "outcomes": [
+          {"name": "Ciudad Ficticia CF", "price": 2.0}, {"name": "Atlético Inventado", "price": 4.0}]}]},
+      {"key": "betfair_ex_eu", "title": "Betfair", "last_update": "2026-10-21T17:59:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:59:00Z", "outcomes": [
+          {"name": "Ciudad Ficticia CF", "price": 2.04}, {"name": "Atlético Inventado", "price": 4.1}, {"name": "Draw", "price": 3.55}]}]},
+      {"key": "sport888", "title": "888sport", "last_update": "2026-10-21T17:58:00Z", "markets": [
+        {"key": "h2h", "last_update": "2026-10-21T17:58:00Z", "outcomes": [
+          {"name": "Ciudad Ficticia CF", "price": 2.15}, {"name": "Atlético Inventado", "price": 3.6}, {"name": "Draw", "price": 3.2}]}]}
+    ]
+  }
+]
