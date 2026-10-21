@@ -244,4 +244,50 @@ Además de tests, ruff, mypy, CI, README y push a `main`:
 
 ## 9. Estado
 
-Se actualiza al terminar la construcción.
+**Fase 1 construida, no cerrada: pendiente de red y clave para cerrar R1–R4** (2026-10-21).
+Durante toda la construcción la red de este entorno bloqueó `api.the-odds-api.com` y no hubo
+`ODDS_API_KEY`, así que se trabajó como D4 = B.
+
+| # | Estado | Cómo comprobarlo |
+|---|---|---|
+| F1 | Cumplido | `uv sync --locked && uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy` |
+| F2 | Cumplido: CI en verde en `main` (calidad + gitleaks). El token del entorno sí permitió subir el workflow | Pestaña Actions del repositorio |
+| F3 | Cumplido | `tests/unit/test_devig.py` |
+| F4 | Cumplido | `tests/unit/test_value.py`, `tests/unit/test_classify.py` |
+| F5 | Cumplido | `tests/unit/test_reference.py`, `tests/integration/test_scan_service.py`, `tests/integration/test_cli.py` |
+| F6 | Cumplido | `tests/integration/test_sqlite.py` (NOT NULL y origen), `test_scan_service.py` |
+| F7 | Cumplido | `tests/integration/test_http_client.py`, `test_scan_service.py::test_segundo_scan_dentro_del_ttl_no_gasta_creditos` |
+| F8 | Cumplido | Tests de clave en http, config y scan; gitleaks sin fugas en historial y árbol (ver incidencia) |
+| F9 | Cumplido | `uv run tipster scan --offline tests/fixtures/the_odds_api/sintetico` |
+| F10 | Cumplido | `.env.example`, README |
+| R1 | **Abierto** | Necesita red y clave |
+| R2 | **Abierto** | Necesita red y clave (el comportamiento está probado con transporte simulado en F7) |
+| R3 | **Abierto** | Necesita red y clave; mientras, las fixtures son sintéticas y su estructura NO VERIFICADA |
+| R4 | **Abierto** | Necesita red y clave; las claves de 6 de las 7 competiciones siguen NO VERIFICADAS |
+
+**Para cerrar la fase:** abrir `api.the-odds-api.com` en la red del entorno, definir
+`ODDS_API_KEY` como secreto y, en la sesión siguiente: `uv run tipster scan` (R1); repetirlo antes
+de 60 s (R2); grabar y sanear una respuesta en `tests/fixtures/the_odds_api/real/` y pasar los
+tests de parseo con ella (R3); actualizar la verificación de proveedores a nivel A (R4). Coste
+estimado: unos 14 créditos por escaneo completo.
+
+**Incidencia de CI resuelta.** La ejecución de `8cf20f7` falló en el job de gitleaks por la clave
+falsa de un test (`generic-api-key`). Se reprodujo en local con gitleaks 8.30.1, binario
+verificado con su checksum, sobre el historial completo. Se corrigió con `gitleaks:allow` en las
+claves falsas de los tests y con la huella del commit ya publicado en `.gitleaksignore`, sin
+reescribir historia (commit `f29fdfe`).
+
+**Precisiones respecto al plan aprobado** (ninguna amplía el alcance):
+1. `OddsBatch` lleva también `external_ids` (id canónico → id del proveedor), que necesita
+   `EventRepository.upsert`.
+2. `captured_at` es el momento de la petición HTTP que trajo la cuota. Las cuotas reutilizadas
+   desde la caché se guardan otra vez, enlazadas a la petición `from_cache = 1`, con su
+   `captured_at` original.
+3. `power_exponent` y `shin_z` se exponen para que los tests puedan fijar k y z.
+4. Las peticiones del modo offline se registran con `http_status` NULL, así que nunca sirven
+   como caché, y `--offline` usa una base en memoria salvo que se pase `--db`.
+5. Toda oportunidad lleva el motivo «liquidez desconocida» (ADR 001).
+6. `tipster scan` admite `--competicion` (repetible) y `--max-creditos`. Códigos de salida:
+   0 (completa o parcial), 1 (error del proveedor) y 2 (configuración).
+7. La CLI se escribió con Rich (incluido en Typer): la tabla necesita un terminal ancho
+   (unas 230 columnas) para no partir celdas.
