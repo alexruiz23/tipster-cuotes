@@ -1,6 +1,6 @@
 # 004 — Persistencia: SQLite detrás de repositorios
 
-**Estado:** Propuesta, pendiente de D7 · **Fecha:** 2026-10-21
+**Estado:** Aceptada (2026-10-21) · **Fecha:** 2026-10-21
 
 ## Contexto
 
@@ -13,7 +13,7 @@ no incluye un ORM.
 2. SQLAlchemy Core: una sola implementación para SQLite y PostgreSQL.
 3. ORM (SQLAlchemy ORM o SQLModel).
 
-## Decisión (propuesta)
+## Decisión
 
 Opción 1. Los repositorios son `Protocol` tipados y su implementación SQLite usa SQL explícito y
 portable: sin funciones propias de SQLite, fechas en texto ISO-8601 UTC y tipos

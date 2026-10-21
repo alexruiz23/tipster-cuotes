@@ -1,6 +1,6 @@
 # 003 — Registro canónico de casas y jurisdicción del feed
 
-**Estado:** Propuesta, pendiente de D1 · **Fecha:** 2026-10-21
+**Estado:** Aceptada (2026-10-21) · **Fecha:** 2026-10-21
 
 ## Contexto
 
@@ -14,15 +14,15 @@ a 2.10» cuando en 888sport.es está a 2.05 sería engañoso.
 1. Usar la clave del proveedor tal cual (por ejemplo, `sport888`).
 2. Un registro canónico de casas que distinga jurisdicción y rol.
 
-## Decisión (propuesta)
+## Decisión
 
 Opción 2. Cada casa es un `BookmakerSpec` con id canónico (`888sport_no_es`, `codere_es`…),
 marca, jurisdicción del feed, rol (`sharp`, `exchange` o `casa`), `es_site` (verdadero solo si el
 feed es el de la web .es con licencia DGOJ) y su clave en cada proveedor.
 
 - Toda oportunidad muestra la jurisdicción del feed.
-- Si `es_site` es falso, la etiqueta incluye «FEED NO-ES · VERIFICA LA CUOTA EN LA WEB .ES», y
-  `TIPSTER_SHOW_NON_ES_FEEDS=false` las oculta (D1).
+- Si `es_site` es falso, la etiqueta incluye siempre «FEED NO-ES · VERIFICA LA CUOTA EN LA WEB
+  .ES». No hay opción para ocultarlos (D1 confirmada).
 - Las referencias (Pinnacle y Betfair Exchange internacional) nunca se presentan como casas en
   las que apostar.
 

@@ -1,6 +1,6 @@
 # 002 — Referencia *sharp* para el devig y el CLV
 
-**Estado:** Propuesta, pendiente de D2 · **Fecha:** 2026-10-21
+**Estado:** Aceptada (2026-10-21) · **Fecha:** 2026-10-21
 
 ## Contexto
 
@@ -22,7 +22,7 @@ métrica principal de calidad. La verificación encontró que:
 3. Pinnacle si está fresca y, si no, Betfair Exchange.
 4. Consenso de varias casas.
 
-## Decisión (propuesta)
+## Decisión
 
 Opción 3.
 

@@ -6,8 +6,8 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 
 | ADR | Título | Estado |
 |---|---|---|
-| [001](001-proveedor-de-cuotas-inicial.md) | Proveedor de cuotas inicial y estrategia multiproveedor | Propuesta |
-| [002](002-referencia-sharp-y-clv.md) | Referencia *sharp* para el devig y el CLV | Propuesta (D2) |
-| [003](003-registro-de-casas-y-jurisdiccion.md) | Registro canónico de casas y jurisdicción del feed | Propuesta (D1) |
-| [004](004-persistencia-sqlite-repositorios.md) | Persistencia: SQLite detrás de repositorios | Propuesta (D7) |
-| [005](005-deporte-y-mercado-como-registros.md) | Deporte y mercado como registros tipados | Propuesta |
+| [001](001-proveedor-de-cuotas-inicial.md) | Proveedor de cuotas inicial y estrategia multiproveedor | Aceptada |
+| [002](002-referencia-sharp-y-clv.md) | Referencia *sharp* para el devig y el CLV | Aceptada |
+| [003](003-registro-de-casas-y-jurisdiccion.md) | Registro canónico de casas y jurisdicción del feed | Aceptada |
+| [004](004-persistencia-sqlite-repositorios.md) | Persistencia: SQLite detrás de repositorios | Aceptada |
+| [005](005-deporte-y-mercado-como-registros.md) | Deporte y mercado como registros tipados | Aceptada |

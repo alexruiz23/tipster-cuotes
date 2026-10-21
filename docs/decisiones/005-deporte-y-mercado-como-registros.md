@@ -1,6 +1,6 @@
 # 005 — Deporte y mercado como registros tipados
 
-**Estado:** Propuesta · **Fecha:** 2026-10-21
+**Estado:** Aceptada (2026-10-21) · **Fecha:** 2026-10-21
 
 ## Contexto
 
@@ -14,7 +14,7 @@ y baloncesto sin repartir `if deporte == …` o `if mercado == …` por el códi
 3. Registros de especificaciones inmutables (`SportSpec`, `CompetitionSpec`, `MarketSpec`) con
    estrategias asociadas.
 
-## Decisión (propuesta)
+## Decisión
 
 Opción 3. Cada mercado se registra una vez con sus selecciones y su línea y, según la fase, sus
 estrategias:

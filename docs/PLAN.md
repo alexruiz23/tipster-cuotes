@@ -1,6 +1,6 @@
 # Plan por fases (afinado en la Fase 0)
 
-**Estado:** propuesta. Necesito tu OK explícito antes de escribir código de la Fase 1.
+**Estado:** aprobado. D1–D7 confirmadas (§3); la Fase 1 sigue [docs/fase-1/plan.md](fase-1/plan.md).
 Base: [verificación de proveedores](fase-0/verificacion-proveedores.md) ·
 [arquitectura](ARQUITECTURA.md) · [decisiones](decisiones/README.md).
 
@@ -39,17 +39,20 @@ commit de la Fase 1** y desde ese momento la puerta se aplica completa.
 Sin red ni clave puedo construir y probar toda la F1 con fixtures, pero no cerrarla: tres
 criterios de aceptación exigen llamadas reales (ver §4.5).
 
-## 3. Decisiones que necesito de ti
+## 3. Decisiones (confirmadas el 2026-10-21)
 
-| # | Decisión | Opciones | Mi recomendación |
+| # | Decisión | Estado | Qué se hace |
 |---|---|---|---|
-| D1 | Feeds no españoles (The Odds API no tiene ninguna web .es) | a) Mostrarlos siempre etiquetados «FEED NO-ES · VERIFICA LA CUOTA EN LA WEB .ES». b) Ocultarlos: la F1 analiza pero no da picks accionables. c) Adelantar OddsPapi a la F1 | **a**, más una Fase 1b con OddsPapi en cuanto esté verificado |
-| D2 | Referencia para el devig y el CLV (Pinnacle se ha degradado) | a) Solo Pinnacle. b) Solo Betfair Exchange. c) Pinnacle si está fresca; si no, Betfair Exchange | **c**. Cada pick dirá qué referencia se usó |
-| D3 | Plan de The Odds API | Gratuito: unos 35 escaneos completos al mes. 20K: 30 $/mes | **Gratuito** en F1–F2; volver a decidirlo en la F3 (las capturas de cierre gastan más) |
-| D4 | Dónde se hacen las llamadas reales | a) En este entorno, abriendo dominios. b) Solo en tu máquina | **a**: me permite verificar y cerrar fases sin depender de ti en cada paso |
-| D5 | Ambos Marcan | a) Solo como salida del modelo (F2) hasta tener un proveedor verificado. b) Pagar mercados por evento en The Odds API sin saber si hay cobertura | **a** |
-| D6 | Champions (sin histórico verificado) | a) Solo con p_mercado y etiqueta «SIN MODELO». b) Buscar ya en la F2 una fuente de partidos europeos | **a**; la fuente queda en el backlog |
-| D7 | Persistencia | a) `sqlite3` de la librería estándar + repositorios. b) SQLAlchemy Core | **a** ([ADR 004](decisiones/004-persistencia-sqlite-repositorios.md)) |
+| D1 | Feeds no españoles | CONFIRMADA (a) | Se muestran siempre etiquetados «FEED NO-ES · VERIFICA LA CUOTA EN LA WEB .ES»; Fase 1b con OddsPapi en cuanto se verifique |
+| D2 | Referencia para el devig y el CLV | CONFIRMADA (c) | Pinnacle si está fresca; si no, Betfair Exchange. Cada pick indica la referencia usada |
+| D3 | Plan de The Odds API | CONFIRMADA | Gratuito en F1–F2; se vuelve a decidir en la F3 |
+| D4 | Dónde se hacen las llamadas reales | A, provisional | En este entorno, cuando estén abiertos los dominios y definida `ODDS_API_KEY`. Si al empezar una sesión siguen bloqueados o falta la clave, se trabaja como B: fixtures y sin cerrar la Fase 1 |
+| D5 | Ambos Marcan | CONFIRMADA (a) | Solo como salida del modelo hasta tener una fuente de cuotas verificada |
+| D6 | Champions | CONFIRMADA (a) | Solo con p_mercado y etiqueta «SIN MODELO» hasta tener histórico verificado |
+| D7 | Persistencia | A | `sqlite3` de la librería estándar + repositorios, sin SQLAlchemy. Se revisa en F2–F3 solo si el acceso a datos se complica |
+
+Además, para la Fase 1: **P1** (tabla `picks` desde la F1) y **P2** (`tipster scan --offline DIR`,
+con la salida marcada «DATOS GRABADOS, NO EN VIVO») aprobadas.
 
 ## 4. Fase 1 — MVP: `tipster scan`
 

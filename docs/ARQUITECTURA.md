@@ -1,6 +1,6 @@
 # Arquitectura propuesta
 
-**Estado:** propuesta de la Fase 0, pendiente de aprobación. Nada de esto está implementado.
+**Estado:** aprobada en la Fase 0. Para la Fase 1, el detalle vigente está en [fase-1/plan.md](fase-1/plan.md).
 Las firmas de código son de diseño y pueden ajustarse al implementar, siempre documentándolo.
 
 ## 1. Principios
@@ -302,7 +302,6 @@ Valores provisionales; los umbrales definitivos se ajustarán solo con datos de 
 | `TIPSTER_ERROR_MARGIN` | `0.15` | Margen sobre la cuota justa para marcar posible error |
 | `TIPSTER_MAX_QUOTE_AGE_MINUTES` | `10` | Antigüedad máxima de una cuota |
 | `TIPSTER_MAX_REFERENCE_AGE_MINUTES` | `10` | Antigüedad máxima de la referencia |
-| `TIPSTER_SHOW_NON_ES_FEEDS` | según D1 | Mostrar o no feeds no españoles (siempre etiquetados) |
 | `TIPSTER_TIMEZONE` | `Europe/Madrid` | Solo para mostrar horas; en BD todo va en UTC |
 
 En la F3 se añaden el bankroll, la fracción de Kelly, el tope por apuesta, la exposición diaria

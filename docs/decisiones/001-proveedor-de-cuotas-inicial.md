@@ -1,6 +1,6 @@
 # 001 — Proveedor de cuotas inicial y estrategia multiproveedor
 
-**Estado:** Propuesta · **Fecha:** 2026-10-21
+**Estado:** Aceptada (2026-10-21) · **Fecha:** 2026-10-21
 
 ## Contexto
 
@@ -26,7 +26,7 @@ que:
 4. API-Football.
 5. API de Betfair directa.
 
-## Decisión (propuesta)
+## Decisión
 
 Opción 3. Se empieza con The Odds API, como pediste, detrás del protocolo `OddsProvider`. El
 diseño es multiproveedor desde el primer día: modelos canónicos, registro de casas con
