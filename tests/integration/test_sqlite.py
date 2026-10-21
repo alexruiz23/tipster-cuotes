@@ -108,13 +108,14 @@ def test_upsert_de_evento_es_idempotente(conn: sqlite3.Connection) -> None:
 
 
 def test_cuotas_ida_y_vuelta_y_ultima_por_seleccion(conn: sqlite3.Connection) -> None:
-    _, request_id = _run_with_request(conn)
+    run_id, first_request = _run_with_request(conn, requested_at=NOW - timedelta(minutes=5))
+    second_request = SqliteRunRepository(conn, clock).record_request(run_id, _record())
     SqliteEventRepository(conn, clock).upsert(make_event(), "the_odds_api", "ext1")
     odds = SqliteOddsRepository(conn)
     old = make_quote(price=2.10, captured_at=NOW - timedelta(minutes=5))
     new = make_quote(price=2.20)
     other = make_quote(selection="empate", price=3.40)
-    ids = odds.add_batch(request_id, [old, new, other])
+    ids = odds.add_batch(first_request, [old]) + odds.add_batch(second_request, [new, other])
     assert len(set(ids)) == 3
     latest = odds.latest("e1", "1x2")
     assert sorted(latest, key=lambda q: q.selection) == [other, new]
