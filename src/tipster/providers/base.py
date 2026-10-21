@@ -68,6 +68,7 @@ class OddsBatch(BaseModel):
 
     competition_id: str
     events: list[Event]
+    external_ids: dict[str, str]  # id canónico del evento → id en el proveedor
     quotes: list[OddsQuote]
     request: RequestRecord
     warnings: list[str]

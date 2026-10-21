@@ -12,6 +12,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Protocol
 from urllib.parse import urlencode
 
 import httpx
@@ -46,6 +47,21 @@ class HttpResult:
     captured_at: datetime  # momento de la petición que trajo los datos (original si es caché)
 
 
+class JsonFetcher(Protocol):
+    """Lo que necesita un proveedor para pedir JSON: HttpClient en vivo u OfflineFetcher."""
+
+    source: str  # origen que se guarda en cada cuota
+
+    def get_json(
+        self, endpoint: str, params: Mapping[str, str], *, estimated_cost: int
+    ) -> HttpResult: ...
+
+
+def params_key(params: Mapping[str, str]) -> str:
+    """Parámetros ordenados en forma de query string (sin la clave)."""
+    return urlencode(sorted(params.items()))
+
+
 def _header_int(headers: httpx.Headers, name: str) -> int | None:
     value = headers.get(name)
     try:
@@ -73,6 +89,7 @@ class HttpClient:
         transport: httpx.BaseTransport | None = None,
     ) -> None:
         self.provider = provider
+        self.source = provider
         self._secrets = dict(secret_params)
         self._policy = policy
         self._budget = budget
@@ -93,10 +110,6 @@ class HttpClient:
             if secret:
                 text = text.replace(secret, "***")
         return text
-
-    @staticmethod
-    def params_key(params: Mapping[str, str]) -> str:
-        return urlencode(sorted(params.items()))
 
     def _record(
         self, endpoint: str, key: str, requested_at: datetime, **fields: object
@@ -151,7 +164,7 @@ class HttpClient:
     def get_json(
         self, endpoint: str, params: Mapping[str, str], *, estimated_cost: int
     ) -> HttpResult:
-        key = self.params_key(params)
+        key = params_key(params)
         now = self._clock()
 
         cached = self._from_cache(endpoint, key, now)
