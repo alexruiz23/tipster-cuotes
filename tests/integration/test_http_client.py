@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 import pytest
 
-from tests.factories import NOW
+from tests.factories import NOW, make_quote
 from tipster.errors import (
     BudgetExceededError,
     ProviderAuthError,
@@ -243,3 +243,65 @@ def test_sin_cabecera_de_coste_se_cobra_la_estimacion(tmp_path: Path) -> None:
     result = client.get_json(ENDPOINT, PARAMS, estimated_cost=2)
     assert result.record.cost is None
     assert budget.spent == 2
+
+
+# -- Petición lenta (ADR 006): captured_at es el inicio del intento; la latencia no rejuvenece --
+
+
+SLOW_SECONDS = 30.0
+
+
+def _slow_client(tmp_path: Path) -> tuple[HttpClient, Callable[[], datetime]]:
+    """Cliente cuyo reloj avanza SLOW_SECONDS mientras el proveedor responde."""
+    time = FakeTime()
+    start_mono = time.mono
+
+    def clock() -> datetime:
+        return NOW + timedelta(seconds=time.mono - start_mono)
+
+    def slow(request: httpx.Request) -> httpx.Response:
+        time.mono += SLOW_SECONDS
+        return _ok([])
+
+    client = HttpClient(
+        provider="the_odds_api",
+        base_url="https://api.example.test",
+        secret_params={"apiKey": KEY},
+        policy=HttpPolicy(min_interval_s=0),
+        budget=CreditBudget(30),
+        cache=None,
+        cache_ttl=timedelta(0),
+        raw_dir=tmp_path / "raw",
+        clock=clock,
+        sleep=time.sleep,
+        monotonic=time.monotonic,
+        jitter=lambda: 0.0,
+        transport=httpx.MockTransport(slow),
+    )
+    return client, clock
+
+
+def test_peticion_lenta_sin_last_update_la_antiguedad_cubre_toda_la_duracion(
+    tmp_path: Path,
+) -> None:
+    client, clock = _slow_client(tmp_path)
+    result = client.get_json(ENDPOINT, PARAMS, estimated_cost=2)
+    received = clock()  # fin de la petición
+    assert result.record.duration_ms == SLOW_SECONDS * 1000
+    assert result.captured_at == NOW  # inicio del intento, no la recepción
+
+    quote = make_quote(captured_at=result.captured_at, last_update=None)
+    duration = timedelta(milliseconds=result.record.duration_ms or 0)
+    # Nunca menor que la duración real: la latencia no hace pasar el dato por más reciente.
+    assert quote.age(received) >= duration
+    assert quote.age(received) == received - NOW
+
+
+def test_peticion_lenta_con_last_update_mide_contra_el_proveedor(tmp_path: Path) -> None:
+    client, clock = _slow_client(tmp_path)
+    result = client.get_json(ENDPOINT, PARAMS, estimated_cost=2)
+    received = clock()
+    last_update = NOW - timedelta(minutes=2)
+    quote = make_quote(captured_at=result.captured_at, last_update=last_update)
+    assert quote.age(received) == received - last_update  # 2 min + 30 s
+    assert quote.age(received) != received - result.captured_at  # no contra captured_at
