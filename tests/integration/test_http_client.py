@@ -21,7 +21,7 @@ from tipster.providers.base import CachedResponse
 from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
 
-KEY = "clave-secreta-de-prueba-1234"
+KEY = "clave-secreta-de-prueba-1234"  # gitleaks:allow (clave falsa de test)
 ENDPOINT = "/v4/sports/soccer_epl/odds"
 PARAMS = {"markets": "h2h,totals", "bookmakers": "pinnacle"}
 CREDIT_HEADERS = {"x-requests-last": "2", "x-requests-used": "12", "x-requests-remaining": "488"}

@@ -1,0 +1,4 @@
+# Falsos positivos revisados a mano. Formato: huella que imprime gitleaks (commit:fichero:regla:línea).
+# Clave falsa de test ("clave-secreta-de-prueba-1234"), no es una credencial real; desde el commit
+# siguiente la línea lleva el comentario gitleaks:allow.
+4b2d5f6c128de4bd6a5b414bfbe0cf742585c5a2:tests/integration/test_http_client.py:generic-api-key:24

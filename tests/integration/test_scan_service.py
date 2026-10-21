@@ -30,7 +30,7 @@ from tipster.storage.sqlite import (
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "the_odds_api" / "sintetico"
 CAPTURED = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)
-KEY = "clave-de-prueba-scan"
+KEY = "clave-de-prueba-scan"  # gitleaks:allow (clave falsa de test)
 
 
 @pytest.fixture

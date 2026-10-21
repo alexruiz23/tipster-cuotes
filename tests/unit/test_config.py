@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from tipster.config import Settings
 from tipster.pricing.devig import DevigMethod
 
-KEY = "clave-de-prueba-config"
+KEY = "clave-de-prueba-config"  # gitleaks:allow (clave falsa de test)
 
 
 def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> Settings:
