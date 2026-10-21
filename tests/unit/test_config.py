@@ -14,7 +14,7 @@ KEY = "clave-de-prueba-config"
 def _settings(monkeypatch: pytest.MonkeyPatch, **env: str) -> Settings:
     for name, value in env.items():
         monkeypatch.setenv(name, value)
-    return Settings(_env_file=None)  # type: ignore[call-arg]
+    return Settings(_env_file=None)
 
 
 @pytest.fixture(autouse=True)
