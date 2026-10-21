@@ -53,6 +53,9 @@ criterios de aceptación exigen llamadas reales (ver §4.5).
 
 ## 4. Fase 1 — MVP: `tipster scan`
 
+> **Sustituido por [docs/fase-1/plan.md](fase-1/plan.md)**, el plan aprobado de la Fase 1. Este
+> apartado queda como la propuesta original de la Fase 0; donde difieran, manda el plan nuevo.
+
 ### 4.1 Objetivo
 
 `tipster scan` lee de The Odds API las cuotas de 1X2 y O/U 2.5 de las competiciones
