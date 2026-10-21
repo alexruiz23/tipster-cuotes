@@ -4,6 +4,14 @@
 Base: [verificación de proveedores](fase-0/verificacion-proveedores.md) ·
 [arquitectura](ARQUITECTURA.md) · [decisiones](decisiones/README.md).
 
+## 0. Estado real de la puerta de salida de la Fase 0
+
+**La puerta de salida de la Fase 0 no se cumplió.** La fase solo produjo documentación y
+`.gitignore`; al no haber código, no hay tests, ruff, mypy ni CI que ejecutar, así que esos
+cuatro requisitos no aplican y no se pueden dar por cumplidos. Sí se cumplieron el README
+actualizado y el push a `main`. La CI (ruff, mypy, pytest y gitleaks) se crea en el **primer
+commit de la Fase 1** y desde ese momento la puerta se aplica completa.
+
 ## 1. Reglas de trabajo (resumen)
 
 - Plan antes que código: cada fase empieza con su propuesta (carpetas, módulos, interfaces,

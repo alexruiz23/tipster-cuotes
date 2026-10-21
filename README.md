@@ -11,6 +11,10 @@ sesión en una casa de apuestas y nunca guarda credenciales de casas.
 
 **Fase 0 — verificación y diseño, pendiente de aprobación.** Todavía no hay código.
 
+**Puerta de salida de la Fase 0: no cumplida.** Sin código no hay tests, ruff, mypy ni CI que
+ejecutar, así que esos requisitos no aplican. La CI se crea en el primer commit de la Fase 1
+(detalle en [PLAN §0](docs/PLAN.md#0-estado-real-de-la-puerta-de-salida-de-la-fase-0)).
+
 | Documento | Contenido |
 |---|---|
 | [Verificación de proveedores](docs/fase-0/verificacion-proveedores.md) | Qué casas, mercados, cuotas de peticiones y precios cubre cada proveedor, con su nivel de verificación |
