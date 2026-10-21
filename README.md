@@ -85,6 +85,10 @@ uv run pre-commit install    # opcional: gitleaks y ruff antes de cada commit
 
 La CI de GitHub Actions ejecuta lo mismo y además gitleaks en cada push y PR.
 
+No hay `CHANGELOG.md`: el historial de commits de `main` hace de changelog. El estado de
+cada fase (handoff) está en su plan; el de la Fase 1, en
+[docs/fase-1/plan.md §9](docs/fase-1/plan.md#9-estado).
+
 ## Limitaciones conocidas
 
 - The Odds API no tiene ninguna web .es: solo feeds de otras jurisdicciones de 888sport, William

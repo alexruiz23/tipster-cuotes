@@ -153,7 +153,7 @@ class OddsQuote(BaseModel):
     market_id: str
     selection: str
     price: float                   # cuota decimal > 1
-    captured_at: AwareDatetime     # UTC: cuándo la recibimos
+    captured_at: AwareDatetime     # UTC: inicio de la petición HTTP que trajo la cuota (ADR 006)
     provider_last_update: AwareDatetime | None   # UTC: cuándo la vio el proveedor en la casa
     source: str                    # "the_odds_api"
 

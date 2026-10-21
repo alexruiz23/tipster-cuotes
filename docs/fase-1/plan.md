@@ -251,7 +251,7 @@ Durante toda la construcción la red de este entorno bloqueó `api.the-odds-api.
 | # | Estado | Cómo comprobarlo |
 |---|---|---|
 | F1 | Cumplido | `uv sync --locked && uv run pytest && uv run ruff check . && uv run ruff format --check . && uv run mypy` |
-| F2 | Cumplido: CI en verde en `main` (calidad + gitleaks). El token del entorno sí permitió subir el workflow | Pestaña Actions del repositorio |
+| F2 | Cumplido: CI en verde (calidad + gitleaks) en el HEAD revisado, `c9384af` (ejecución 9). Se vuelve a comprobar tras cada push. El token del entorno sí permitió subir el workflow | Pestaña Actions del repositorio |
 | F3 | Cumplido | `tests/unit/test_devig.py` |
 | F4 | Cumplido | `tests/unit/test_value.py`, `tests/unit/test_classify.py` |
 | F5 | Cumplido | `tests/unit/test_reference.py`, `tests/integration/test_scan_service.py`, `tests/integration/test_cli.py` |
@@ -280,14 +280,39 @@ reescribir historia (commit `f29fdfe`).
 **Precisiones respecto al plan aprobado** (ninguna amplía el alcance):
 1. `OddsBatch` lleva también `external_ids` (id canónico → id del proveedor), que necesita
    `EventRepository.upsert`.
-2. `captured_at` es el momento de la petición HTTP que trajo la cuota. Las cuotas reutilizadas
-   desde la caché se guardan otra vez, enlazadas a la petición `from_cache = 1`, con su
-   `captured_at` original.
+2. **`captured_at` cambió respecto a ARQUITECTURA** («cuándo la recibimos»): es el **inicio del
+   intento HTTP** que trajo la respuesta (con reintentos, el del intento con éxito), porque es el
+   instante más antiguo posible y nunca presenta un dato como más reciente de lo que es. La
+   antigüedad que comparan `max_quote_age_minutes` y `max_reference_age_minutes` se mide contra
+   `provider_last_update`, y solo si falta, contra `captured_at`. La caché conserva el
+   `captured_at` original: está cubierta por un test. No hay test de «petición lenta»; queda
+   propuesto, pendiente de OK, en [ADR 006](../decisiones/006-hora-de-captura-y-antiguedad.md). Las
+   cuotas reutilizadas se guardan otra vez, enlazadas a la petición `from_cache = 1`.
 3. `power_exponent` y `shin_z` se exponen para que los tests puedan fijar k y z.
 4. Las peticiones del modo offline se registran con `http_status` NULL, así que nunca sirven
    como caché, y `--offline` usa una base en memoria salvo que se pase `--db`.
-5. Toda oportunidad lleva el motivo «liquidez desconocida» (ADR 001).
+5. Toda oportunidad lleva el motivo «liquidez desconocida» (ADR 001). **Interpretación
+   provisional:** aviso y no descarte, porque The Odds API no expone liquidez ni límites; la regla
+   «descartar por liquidez o límite bajo» queda pendiente de tu confirmación. Si se descartara,
+   hoy no habría ningún pick.
 6. `tipster scan` admite `--competicion` (repetible) y `--max-creditos`. Códigos de salida:
    0 (completa o parcial), 1 (error del proveedor) y 2 (configuración).
 7. La CLI se escribió con Rich (incluido en Typer): la tabla necesita un terminal ancho
    (unas 230 columnas) para no partir celdas.
+
+**Notas de la revisión del cierre** (2026-10-21):
+- **Recuento de commits:** `git rev-list --count main` = 43 = `origin/main`;
+  `git rev-list --count 317bd61..HEAD` = 41, porque excluye `317bd61` y `670d4ed`. Desglose: 1
+  (`670d4ed`, Sección 0) + 7 (Fase 0, `317bd61`…`da0c568`) + 1 (`2b3994c`) + 2 (`a372366`,
+  `dd17795`) + 32 (Fase 1, `dfe2ebd`…`c9384af`) = 43. El informe anterior decía «30» para la Fase 1:
+  era un error y son 32. Este commit de revisión suma uno más.
+- **gitleaks y licencias:** el CLI de gitleaks es MIT (`LICENSE` de
+  github.com/gitleaks/gitleaks). La acción `gitleaks/gitleaks-action` usada en la CI tiene licencia
+  propia (`LICENSE.txt`, «GITLEAKS-ACTION END-USER LICENSE AGREEMENT»): exige una *License Key*
+  para repositorios de organizaciones y no para cuentas personales. De ahí sale la nota del
+  workflow, que se mantiene.
+- **Segunda «saltada» en offline:** no es un fallo de mapeo ni un hallazgo sobre el proveedor. El
+  `sports.json` sintético solo lista LaLiga y Premier, a propósito, para probar el camino de
+  competición no listada. Si The Odds API cubre la Segunda (y con qué clave) es parte de R4.
+- **Changelog:** no hay `CHANGELOG.md`; el historial de commits de `main` hace de changelog.
+
