@@ -8,9 +8,9 @@ from fractions import Fraction
 from itertools import pairwise
 
 import pytest
-from tipster.pricing.devig import DevigMethod, devig, devig_additive, devig_multiplicative
 
 from tipster.errors import DevigError
+from tipster.pricing.devig import DevigMethod, devig, devig_additive, devig_multiplicative
 
 Devig = Callable[[Sequence[float]], tuple[float, ...]]
 
