@@ -1,10 +1,11 @@
 # 007 — Histórico (dataset de Hugging Face), referencia de mercado, Dixon-Coles, Elo y validación walk-forward
 
-**Estado:** Propuesta (2026-10-29) · **Fecha:** 2026-10-29
+**Estado:** Aceptada (2026-10-29) · **Fecha:** 2026-10-29
 
-Pendiente de tu OK a este diseño y de validar los datos (informe de la
-[verificación §15](../fase-0/verificacion-proveedores.md#15-verificación-de-nivel-a-del-dataset-eatpizzanotsoccer-dataset-fase-2-2026-10-29)).
-**No se escribe código de la Fase 2 hasta entonces.**
+Aceptada por el usuario el 2026-10-29 con tres condiciones: 9 temporadas con mercado (2016/17 a
+2024/25), solo 1X2 y una sola referencia de cierre. Datos verificados en la
+[verificación §15](../fase-0/verificacion-proveedores.md#15-verificación-de-nivel-a-del-dataset-eatpizzanotsoccer-dataset-fase-2-2026-10-29).
+La ingesta (sección 2) está implementada; Dixon-Coles y Elo, no.
 
 **Historial de este ADR.** La primera versión descargaba los CSV de football-data.co.uk. Se
 descartó el 2026-10-29 porque sus términos limitan el uso a «private individuals only, NOT
@@ -64,44 +65,56 @@ Lo observado en el dataset (verificación §15) condiciona el diseño:
   modelo no usa las cuotas como entrada y el ingestor filtra por `source`, así que excluir las filas
   `CSV` es un cambio de una línea si hiciera falta.
 
-## 2. Almacenamiento en SQLite (migración `0002_historico.sql`)
+## 2. Almacenamiento en SQLite (migración `0002_historico.sql`, implementada)
 
-Se mantiene el diseño por tablas y el formato largo para las cuotas.
+La primera versión de este ADR proponía cuotas en formato largo y cuatro tablas. Se implementó
+una versión más simple, a petición del usuario: solo se guarda el cierre de Pinnacle, así que va
+en columnas del propio partido.
 
 ```
-dataset_files    (id, name, hf_revision, sha256, n_rows, fetched_at, raw_path)
-teams            (id, name)                                   -- nombre canónico del proyecto
-team_aliases     (source, raw_id, raw_name, team_id)          -- PK (source, raw_id)
-historical_matches (
-  id, competition_id, season, match_date,                     -- fecha ISO; la unidad de tiempo es el día
-  kickoff_utc,                                                -- NULL si la hora es 00:00 (solo había fecha)
-  home_team_id, away_team_id, fthg, ftag,
-  source_fixture_id,                                          -- fixtures.id del dataset
-  file_id REFERENCES dataset_files,
-  UNIQUE (competition_id, season, match_date, home_team_id, away_team_id) )
-historical_odds  (
-  match_id, bookmaker, market_id, selection, price, source,   -- source = columna `source` del dataset
-  PRIMARY KEY (match_id, bookmaker, market_id, selection),
-  CHECK (price > 1) )
+teams              (id, name)                      -- id del dataset ya canónico
+historical_matches (id, competition_id, match_date,   -- AAAA-MM-DD, sin hora
+                    home_team_id, away_team_id, home_goals, away_goals,
+                    pinnacle_home, pinnacle_draw, pinnacle_away,   -- NULL si no hay cuota
+                    odds_source,                      -- columna `source` del dataset
+                    source_fixture_id, run_id,        -- trazabilidad (fixtures.id; ejecución)
+                    UNIQUE (competition_id, match_date, home_team_id, away_team_id))
 ```
-- **Solo 1X2** (`market_id = '1x2'`; `home_win`, `draw`, `away_win` → `local`, `empate`, `visitante`).
-  Todas las filas de `odds` se consideran cierre porque así las etiqueta el dataset
-  («Odds known at/around kick-off (closing line)»); que lo sean en realidad es NO VERIFICADO.
-- **Duplicados de equipo:** el dataset trae el mismo club con ids distintos. `team_aliases` apunta
-  cada `teams.id` del dataset a un equipo canónico (fichero versionado en el repo, hecho a mano). Al
-  cargar, los partidos se **colapsan por clave canónica** `(liga, día, local, visitante)`; si dos
-  copias discrepan en el resultado, la carga **falla** con ambos ids. Un test usa un ejemplo
-  sintético con dos ids para el mismo club.
-- **Temporada:** `season` se deriva con el 1 de agosto como corte (el 2019/20 terminó en julio de
-  2020). La Champions es una competición aparte con su propio calendario.
-- **Fixtures de test:** sintéticas e inventadas, no filas del dataset.
-- **Carga idempotente** (`INSERT … ON CONFLICT`).
+- **Solo 1X2 de Pinnacle.** Las demás casas (Bet365, etc.) no se guardan; con ello tampoco entra
+  ninguna cuota de `source = CSV` (football-data.co.uk). Una cuota ≤ 1 cuenta como ausente. Si el
+  partido tiene varias filas de Pinnacle se prefiere `API-Football-closing`.
+- **Un partido sin cuota de Pinnacle se guarda igual,** con las tres columnas y `odds_source` a
+  `NULL` (una restricción `CHECK` obliga a que sean todas nulas o ninguna). Sirve para entrenar, y
+  solo se descarta al comparar con el mercado.
+- **Fecha:** solo el día. No se guarda hora de partido ni `known_at`, ni se inventa una hora de
+  captura para el histórico.
+- **Solo partidos jugados** de las 6 ligas (`leagues.fd_code` E0, SP1, SP2, I1, D1, F1). La
+  Champions no se carga todavía.
+- **Rango:** `tipster ingest --from A --to B` carga las fechas entre el 1 de agosto de A y el 31 de
+  julio de B+1. No hay columna `season` (el corte de agosto parte mal las temporadas terminadas en
+  agosto de 2020).
+- **Duplicados de equipo:** `src/tipster/history/team_aliases.csv` (a mano, 13 filas) lleva
+  `alias_id, alias_name, canonical_id, canonical_name`. Si un id del fichero tiene otro nombre en
+  el dataset, la carga **falla** (los ids habrían cambiado). Los alias salieron de buscar, por liga,
+  partidos del mismo día y marcador con un equipo en común y el otro distinto.
+- **Colapso de copias:** tras unificar equipos, dos filas son el mismo partido si coinciden
+  competición, local y visitante y sus fechas distan **como mucho un día** (el CSV de origen a veces
+  fecha un día antes). Si discrepan en el marcador, la carga falla con los dos ids. De cada grupo
+  se conserva la copia de **fecha más tardía**, por prudencia: nunca da un resultado por conocido
+  antes de tiempo. La cuota se toma de la primera copia del grupo que la tenga.
+- **Carga idempotente:** `INSERT … ON CONFLICT DO UPDATE` y una transacción; ejecutarla dos veces
+  deja las mismas filas. Cada ejecución queda en `runs` (`command = ingest`) con la revisión del
+  dataset y el sha256 de cada Parquet.
+- **Crudos y trazabilidad:** los Parquet van a `data/raw/huggingface/<revisión[:12]>/` (ignorado
+  por git) con un fichero `<nombre>.parquet.sha256`. La revisión está fijada, así que no se
+  vuelven a descargar; si el sha256 de un fichero cambia en disco, la ingesta falla.
+- **Fixtures de test:** Parquet sintéticos e inventados creados en el propio test.
+- **Dependencia nueva:** `pyarrow` (lectura de Parquet). Es la mínima que hace falta.
 
-### Consecuencias
-- Hasta 2015/16 hay resultados pero no cuotas: sirven para calentar el modelo, no para compararlo
-  con el mercado.
-- `kickoff_utc` es `NULL` en unos 1 400 partidos de las 6 ligas entre 2016/17 y 2024/25 (hora
-  00:00): por eso la unidad de tiempo del walk-forward sigue siendo el día.
+### Resultado de la ingesta real (2026-10-29, revisión `f0cbe86…`, `--from 2016 --to 2025`)
+24 216 partidos leídos, 1 572 duplicados eliminados y **22 644 cargados**, de los que 21 971
+(97,0 %) tienen el cierre de Pinnacle completo. Fechas del 2016-08-12 al 2026-06-20. Por temporada,
+el porcentaje con Pinnacle es del 98,8 % al 100 % entre 2016/17 y 2024/25 y del 72,9 % en 2025/26.
 
 ## 3. Referencia de mercado y la ruptura de Pinnacle
 

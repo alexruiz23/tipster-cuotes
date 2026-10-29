@@ -51,6 +51,15 @@ uv run tipster scan
 uv run tipster scan --competicion laliga --competicion premier --max-creditos 10
 ```
 
+```bash
+# Fase 2: histórico de partidos y cierre de Pinnacle (descarga ~16 MB una sola vez)
+uv run tipster ingest --from 2016 --to 2025
+```
+
+El histórico viene de [eatpizzanot/soccer-dataset](https://huggingface.co/datasets/eatpizzanot/soccer-dataset)
+(CC-BY-4.0), compilado a partir de API-Football y football-data.co.uk. Hay que citarlos en
+cualquier informe que lo use. Detalle en el [ADR 007](docs/decisiones/007-historico-y-dixon-coles.md).
+
 `tipster scan` muestra, por cada oportunidad: partido, mercado, selección, casa (con la
 jurisdicción de su feed), cuota, cuota justa, p_modelo («—» hasta la Fase 3), p_mercado, EV, stake
 («—» hasta la Fase 3), etiqueta, referencia usada y hora de captura. Etiquetas:
