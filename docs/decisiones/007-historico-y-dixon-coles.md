@@ -191,7 +191,7 @@ comparación y se decide después.
   métricas, ninguna cuota como entrada) y se informa junto a Dixon-Coles y el mercado.
 - **Hiperparámetros** (factor K, ventaja de campo y rating inicial de los equipos nuevos): se
   eligen en el tramo de validación. No se fija ningún valor aquí.
-- **Qué falta y requiere un ADR propio (008) antes de implementar:** cómo convertir la diferencia
+- **Qué falta y requiere un ADR propio (el [010](010-elo-davidson.md)) antes de implementar:** cómo convertir la diferencia
   de Elo en probabilidades de 1X2. El Elo no da la probabilidad de empate por sí solo.
 - **Tests a mano:** actualización de rating tras un resultado concreto (PLAN §6); la suma de las
   probabilidades 1X2 es 1; y un test que falla si Elo usa un resultado de fecha igual o posterior a
