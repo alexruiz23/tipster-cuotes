@@ -13,3 +13,4 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 | [005](005-deporte-y-mercado-como-registros.md) | Deporte y mercado como registros tipados | Aceptada |
 | [006](006-hora-de-captura-y-antiguedad.md) | Hora de captura y antigüedad de las cuotas | Aceptada |
 | [007](007-historico-y-dixon-coles.md) | Histórico, ruptura de Pinnacle, Dixon-Coles, Elo y validación walk-forward | Aceptada |
+| [008](008-dixon-coles-core.md) | Núcleo de Dixon-Coles: verosimilitud y máxima verosimilitud por liga | Aceptada |

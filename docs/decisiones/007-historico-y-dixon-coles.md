@@ -161,8 +161,8 @@ P(x, y) = τ(x, y; λ, μ, ρ) · Poisson(x; λ) · Poisson(y; μ)
 ### Parámetros que se estiman
 | Parámetro | Alcance | Notas |
 |---|---|---|
-| `a_i` ataque | por equipo | restricción `Σ a_i = 0` por liga para que sea identificable |
-| `d_i` defensa | por equipo | restricción `Σ d_i = 0` |
+| `a_i` ataque | por equipo | restricción `Σ a_i = 0` por liga para que sea identificable (una sola; ver ADR 008) |
+| `d_i` defensa | por equipo | sin restricción: absorbe el nivel medio de goles (ADR 008) |
 | `h` ventaja de campo | uno por liga | |
 | `ρ` | uno por liga | corrige los marcadores 0-0, 1-0, 0-1 y 1-1; el rango admisible depende de λ y μ y se comprueba |
 | `ξ` decaimiento | hiperparámetro | peso `exp(−ξ·Δt)`, con Δt en días desde el partido hasta la fecha de predicción; se configura como **vida media** (`ln2/ξ`) |
@@ -172,7 +172,7 @@ P(x, y) = τ(x, y; λ, μ, ρ) · Poisson(x; λ) · Poisson(y; μ)
 - **Ajuste:** máxima verosimilitud ponderada con `scipy.optimize` (ya es dependencia). Los valores
   de vida media y penalización **no se fijan aquí**: se eligen por malla en el tramo de validación y
   se registran. Cualquier número que aparezca ahora sería una invención.
-- **Matriz de marcadores:** hasta 10-10 goles; el test falla si la masa fuera de la matriz es mayor
+- **Matriz de marcadores:** hasta 20-20 goles (ADR 008); el test falla si la masa fuera de la matriz es mayor
   que 1e-6; se renormaliza.
 - **Mercados:** 1X2 = triángulo inferior, diagonal y superior; O/U 2.5 = P(goles totales ≥ 3);
   BTTS = 1 − P(local 0) − P(visitante 0) + P(0,0). BTTS no se evalúa en la F2: no hay cuotas.
