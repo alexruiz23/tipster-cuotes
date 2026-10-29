@@ -80,3 +80,23 @@ class OddsProvider(Protocol):
     def list_competitions(self) -> CompetitionListing: ...
 
     def fetch_odds(self, request: OddsRequest) -> OddsBatch: ...
+
+
+@dataclass(frozen=True)
+class MatchScore:
+    external_id: str  # id del evento en el proveedor
+    completed: bool
+    home_goals: int | None
+    away_goals: int | None
+
+
+@dataclass(frozen=True)
+class ScoreBatch:
+    scores: list[MatchScore]
+    request: RequestRecord
+
+
+class ScoreProvider(Protocol):
+    name: str
+
+    def fetch_scores(self, competition_id: str, days_from: int) -> ScoreBatch: ...

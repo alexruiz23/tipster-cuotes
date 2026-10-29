@@ -45,5 +45,19 @@ class TOASport(_Model):
     active: bool
 
 
+class TOAScore(_Model):
+    name: str
+    score: str | None = None
+
+
+class TOAScoreEvent(_Model):
+    id: str
+    completed: bool
+    home_team: str
+    away_team: str
+    scores: list[TOAScore] | None = None
+
+
 EVENTS = TypeAdapter(list[TOAEvent])
+SCORES = TypeAdapter(list[TOAScoreEvent])
 SPORTS = TypeAdapter(list[TOASport])
