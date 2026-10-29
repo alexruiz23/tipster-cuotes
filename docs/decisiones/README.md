@@ -12,3 +12,4 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 | [004](004-persistencia-sqlite-repositorios.md) | Persistencia: SQLite detrás de repositorios | Aceptada |
 | [005](005-deporte-y-mercado-como-registros.md) | Deporte y mercado como registros tipados | Aceptada |
 | [006](006-hora-de-captura-y-antiguedad.md) | Hora de captura y antigüedad de las cuotas | Aceptada |
+| [007](007-historico-y-dixon-coles.md) | Histórico, ruptura de Pinnacle, Dixon-Coles y validación walk-forward | Propuesta |
