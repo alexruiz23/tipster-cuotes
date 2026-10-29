@@ -4,9 +4,11 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
+import numpy as np
 import typer
 from pydantic import ValidationError
 from rich.console import Console
+from rich.table import Table
 
 from tipster import DISCLAIMER
 from tipster.cli.render import disclaimer, offline_banner, render_scan
@@ -14,6 +16,9 @@ from tipster.config import Settings
 from tipster.errors import ConfigError, IngestError
 from tipster.history.hf_dataset import ATTRIBUTION, DATASET_REVISION, fetch_tables
 from tipster.history.ingest import DEFAULT_ALIASES, ingest, load_aliases
+from tipster.history.matches import load_market_probs, load_matches
+from tipster.models.evaluation import brier, log_loss, outcome_index
+from tipster.models.tuning import grid_search
 from tipster.providers.base import OddsProvider
 from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
@@ -192,3 +197,72 @@ def ingest_command(
         console.print(f"  {competition}: {count}", markup=False)
     console.print(f"Revisión del dataset: {DATASET_REVISION}", markup=False)
     console.print(ATTRIBUTION, markup=False)
+
+
+@app.command("tune")
+def tune_command(
+    *,
+    competition: Annotated[str, typer.Option("--competition", help="Competición.")] = "premier",
+    train_from: Annotated[str, typer.Option(help="Primer día de entrenamiento.")] = "2016-08-01",
+    train_to: Annotated[str, typer.Option(help="Último día de entrenamiento.")] = "2023-07-31",
+    test_to: Annotated[
+        str, typer.Option(help="Último día de prueba (empieza al día siguiente).")
+    ] = "2024-07-31",
+    half_life: Annotated[
+        list[float] | None, typer.Option("--half-life", help="Vidas medias en días (repetible).")
+    ] = None,
+    l2: Annotated[
+        list[float] | None, typer.Option("--l2", help="Valores de λ₂ (repetible).")
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Prueba una malla de vida media y λ₂ de Dixon-Coles: entrena hasta `train-to` y puntúa."""
+    console = Console()
+    settings = _settings(console, None, None)
+    start, end, last = (date.fromisoformat(d) for d in (train_from, train_to, test_to))
+    first_test = end + timedelta(days=1)
+    half_lives: list[float | None] = [*(half_life or [90, 180, 365, 730]), None]
+    conn = connect(db or settings.db_path)
+    try:
+        train = load_matches(conn, competition, start, end)
+        test = load_matches(conn, competition, first_test, last)
+        market = load_market_probs(conn, competition, first_test, last)
+    finally:
+        conn.close()
+    results = grid_search(train, test, half_lives=half_lives, l2s=l2 or [0.0, 0.1, 1.0, 5.0, 10.0])
+    outcomes = np.array([outcome_index(m.home_goals, m.away_goals) for m in test])
+    console.print(
+        f"{competition}: {len(train)} partidos de entrenamiento ({start} a {end}), "
+        f"{len(test)} de prueba ({first_test} a {last}).",
+        markup=False,
+    )
+    table = Table("vida media (días)", "λ₂", "log-loss", "Brier", "equipos desconocidos")
+    for r in results:
+        label = "sin decaimiento" if r.half_life_days is None else f"{r.half_life_days:g}"
+        table.add_row(
+            label, f"{r.l2:g}", f"{r.log_loss:.4f}", f"{r.brier:.4f}", r.error or str(r.unseen)
+        )
+    console.print(table)
+    has_market = np.array([p is not None for p in market])
+    if has_market.any():
+        probs = np.array([p for p in market if p is not None])
+        console.print(
+            f"Cierre de Pinnacle sin margen ({int(has_market.sum())} partidos con cuota): "
+            f"log-loss {log_loss(probs, outcomes[has_market]):.4f}, "
+            f"Brier {brier(probs, outcomes[has_market]):.4f}.",
+            markup=False,
+        )
+    ok = [r for r in results if r.error is None]
+    if ok:
+        best = ok[0]
+        base = next((r for r in ok if r.half_life_days is None and r.l2 == 0), None)
+        console.print(
+            f"Mejor combinación: vida media {best.half_life_days}, λ₂ {best.l2:g} "
+            f"(log-loss {best.log_loss:.4f}, Brier {best.brier:.4f}).",
+            markup=False,
+        )
+        if base is not None:
+            console.print(
+                f"Modelo base (sin decaimiento, λ₂ = 0): log-loss {base.log_loss:.4f}.",
+                markup=False,
+            )

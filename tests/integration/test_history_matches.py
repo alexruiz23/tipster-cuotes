@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tipster.history.matches import load_matches
+from tipster.history.matches import load_market_probs, load_matches
 from tipster.models.dixon_coles import Match
 from tipster.storage.db import connect
 
@@ -48,3 +48,15 @@ def test_load_matches_no_ve_nada_posterior_al_fin(conn: sqlite3.Connection) -> N
     assert load_matches(conn, "premier", date(2016, 8, 1), date(2024, 7, 30)) == [
         Match(1, 2, 2, 1, date(2016, 8, 13))
     ]
+
+
+def test_load_market_probs_quita_el_margen_y_respeta_el_orden(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "UPDATE historical_matches SET pinnacle_home = 1.8, pinnacle_draw = 3.6,"
+        " pinnacle_away = 3.6, odds_source = 'API-Football-closing' WHERE source_fixture_id = 1"
+    )
+    conn.commit()
+    probs = load_market_probs(conn, "premier", date(2016, 8, 1), date(2024, 7, 31))
+    # q = (1/1,8; 1/3,6; 1/3,6) = (5/9; 5/18; 5/18), Q = 10/9 → p = (0,5; 0,25; 0,25)
+    assert probs[0] == pytest.approx((0.5, 0.25, 0.25), abs=1e-12)
+    assert probs[1] is None  # el segundo partido no tiene cuota
