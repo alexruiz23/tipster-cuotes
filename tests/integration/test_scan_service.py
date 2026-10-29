@@ -2,7 +2,7 @@
 
 import json
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -178,9 +178,10 @@ def test_credenciales_rechazadas_abortan_con_error(conn: sqlite3.Connection) -> 
     assert conn.execute("SELECT status FROM runs").fetchone()[0] == "error"
 
 
-def test_segundo_scan_dentro_del_ttl_no_gasta_creditos(
+def _scan_con_ttl(
     conn: sqlite3.Connection, tmp_path: Path
-) -> None:
+) -> tuple[Callable[[datetime], ScanResult], list[httpx.Request]]:
+    """Scan de LaLiga, caché de 60 s y proveedor simulado: devuelve scan(now) y sus llamadas."""
     calls: list[httpx.Request] = []
     files = {
         "/v4/sports": FIXTURES / "sports.json",
@@ -210,6 +211,13 @@ def test_segundo_scan_dentro_del_ttl_no_gasta_creditos(
             conn, TheOddsApiProvider(http), _settings(competitions=("laliga",)), now
         ).run()
 
+    return scan, calls
+
+
+def test_segundo_scan_dentro_del_ttl_no_gasta_creditos(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    scan, calls = _scan_con_ttl(conn, tmp_path)
     first = scan(CAPTURED)
     second = scan(CAPTURED + timedelta(seconds=30))
     assert first.credits_spent == 2
@@ -220,3 +228,25 @@ def test_segundo_scan_dentro_del_ttl_no_gasta_creditos(
     raw_files = list(tmp_path.rglob("*.json"))
     assert raw_files
     assert all(KEY not in f.read_text(encoding="utf-8") for f in raw_files)
+
+
+def test_scan_con_el_ttl_expirado_vuelve_al_proveedor_y_gasta_creditos(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    scan, calls = _scan_con_ttl(conn, tmp_path)
+    first = scan(CAPTURED)
+    second = scan(CAPTURED + timedelta(seconds=61))  # 1 s más que el TTL de 60 s
+    assert first.credits_spent == 2
+    assert second.credits_spent == 2
+    assert second.cache_hits == 0
+    assert len(calls) == 4  # /sports y /odds en cada ejecución
+    assert _pick_summary(second) == _pick_summary(first)
+
+
+def test_el_ttl_incluye_el_limite_exacto(conn: sqlite3.Connection, tmp_path: Path) -> None:
+    scan, calls = _scan_con_ttl(conn, tmp_path)
+    scan(CAPTURED)
+    at_limit = scan(CAPTURED + timedelta(seconds=60))  # justo el TTL: aún es caché
+    assert at_limit.credits_spent == 0
+    assert at_limit.cache_hits == 2
+    assert len(calls) == 2
