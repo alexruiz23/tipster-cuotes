@@ -135,3 +135,37 @@ def test_la_prueba_no_puede_solaparse_con_el_historial(
         walk_forward_dixon_coles(test, history, half_life_days=730)  # al revés: se solapan
     with pytest.raises(FitError, match="historial"):
         walk_forward_elo(test, history, STARTS[0])
+
+
+def _with_newcomer(split: tuple[list[Match], list[Match]]) -> tuple[list[Match], list[Match]]:
+    """Un ascendido (equipo 5) juega un único partido el primer día de la prueba."""
+    history, test = split
+    day = test[0].day
+    assert day is not None
+    return history, [Match(5, 1, 3, 0, day), *test]
+
+
+def test_un_equipo_con_un_solo_partido_diverge_sin_l2_y_converge_con_ella(
+    split: tuple[list[Match], list[Match]],
+) -> None:
+    history, test = _with_newcomer(split)
+    with pytest.raises(FitError, match="diverge"):
+        walk_forward_dixon_coles(history, test, half_life_days=730, block_days=7)
+    result = walk_forward_dixon_coles(history, test, half_life_days=730, block_days=7, l2=0.01)
+    assert result.probs.shape == (len(test), 3)
+    assert np.allclose(result.probs.sum(axis=1), 1.0)
+
+
+def test_l2_se_pasa_a_cada_ajuste(
+    split: tuple[list[Match], list[Match]], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    history, test = split
+    seen = []
+
+    def spy(matches: list[Match], **kwargs: float | None) -> object:
+        seen.append(kwargs["l2"])
+        return fit(matches, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(walk_forward, "fit", spy)
+    walk_forward_dixon_coles(history, test, half_life_days=730, block_days=28, l2=0.01)
+    assert seen and set(seen) == {0.01}

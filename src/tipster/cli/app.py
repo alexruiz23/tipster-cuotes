@@ -309,6 +309,7 @@ def evaluate_command(
     ] = "2018-07-31",
     half_life: Annotated[float, typer.Option(help="Vida media de Dixon-Coles, en días.")] = 730.0,
     block_days: Annotated[int, typer.Option(min=1, help="Días por bloque de reajuste.")] = 1,
+    l2: Annotated[float, typer.Option(min=0.0, help="λ₂ de Dixon-Coles (ADR 011).")] = 0.01,
     db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
 ) -> None:
     """Walk-forward estricto: Dixon-Coles por bloques, Elo partido a partido y Pinnacle."""
@@ -334,6 +335,7 @@ def evaluate_command(
                 scored_after=scored,
                 half_life_days=half_life,
                 block_days=block_days,
+                l2=l2,
             )
             for name in leagues
         ]
@@ -342,4 +344,4 @@ def evaluate_command(
         raise typer.Exit(EXIT_RUN_ERROR) from exc
     finally:
         conn.close()
-    render_evaluation(console, reports, block_days)
+    render_evaluation(console, reports, block_days, l2)

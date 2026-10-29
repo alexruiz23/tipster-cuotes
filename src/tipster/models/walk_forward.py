@@ -48,9 +48,11 @@ def walk_forward_dixon_coles(
     *,
     half_life_days: float,
     block_days: int = 1,
+    l2: float = 0.0,
 ) -> WalkForwardResult:
     """Reajusta Dixon-Coles antes de cada bloque con el historial y todo lo de la prueba anterior
-    a la primera fecha del bloque (estrictamente anterior), y predice el bloque."""
+    a la primera fecha del bloque (estrictamente anterior), y predice el bloque. Un equipo con
+    muy pocos partidos (un ascendido) solo converge con `l2` > 0 (ADR 011)."""
     _check(history, test)
     probs = np.zeros((len(test), 3))
     unseen = fits = 0
@@ -58,7 +60,7 @@ def walk_forward_dixon_coles(
     for block in day_blocks(test, block_days):
         first = min(_day(test[i]) for i in block)
         training = [*history, *(m for m in test if _day(m) < first)]
-        model = fit(training, half_life_days=half_life_days)
+        model = fit(training, half_life_days=half_life_days, l2=l2)
         fits += 1
         for i in block:
             p = model.predict_proba(test[i].home_id, test[i].away_id)

@@ -38,11 +38,13 @@ def _pair(reports: Sequence[LeagueReport], a: str, b: str) -> list[str]:
     return cells
 
 
-def render_evaluation(console: Console, reports: Sequence[LeagueReport], block_days: int) -> None:
+def render_evaluation(
+    console: Console, reports: Sequence[LeagueReport], block_days: int, l2: float
+) -> None:
     names = [r.competition for r in reports]
     console.print(
         f"Walk-forward estricto, bloques de {block_days} día(s): Dixon-Coles se reajusta antes de "
-        "cada bloque con todo lo anterior; el Elo se actualiza partido a partido.",
+        f"cada bloque con todo lo anterior (λ₂ = {l2:g}); el Elo se actualiza partido a partido.",
         markup=False,
     )
 
@@ -137,9 +139,27 @@ def render_evaluation(console: Console, reports: Sequence[LeagueReport], block_d
     )
     console.print(draws)
 
-    console.print(
-        f"Cómputo: Dixon-Coles {sum(r.dc_fits for r in reports)} ajustes en "
-        f"{sum(r.dc_seconds for r in reports):.1f} s; estimación del Elo "
-        f"{sum(r.elo_fit_seconds for r in reports):.1f} s (3 inicios por liga).",
-        markup=False,
+    times = Table(
+        "liga",
+        "ajustes de Dixon-Coles",
+        "segundos",
+        "s por ajuste",
+        "estimación del Elo (s)",
+        title="cómputo",
     )
+    for r in reports:
+        times.add_row(
+            r.competition,
+            str(r.dc_fits),
+            f"{r.dc_seconds:.1f}",
+            f"{r.dc_seconds / max(r.dc_fits, 1):.2f}",
+            f"{r.elo_fit_seconds:.1f}",
+        )
+    times.add_row(
+        "TOTAL",
+        str(sum(r.dc_fits for r in reports)),
+        f"{sum(r.dc_seconds for r in reports):.1f}",
+        "",
+        f"{sum(r.elo_fit_seconds for r in reports):.1f}",
+    )
+    console.print(times)

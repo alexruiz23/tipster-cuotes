@@ -30,7 +30,9 @@ def test_evaluate_muestra_las_tablas_del_walk_forward(db: Path) -> None:
         "Elo − Dixon-Coles",
         "Dixon-Coles reajustado − sin reajuste",
         "tasa de empates",
-        "Cómputo: Dixon-Coles",
+        "cómputo",
+        "TOTAL",
+        "λ₂ = 0.01",
     ):
         assert text in result.output
 

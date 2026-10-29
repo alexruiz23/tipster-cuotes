@@ -45,6 +45,7 @@ def evaluate_league(
     scored_after: date,
     half_life_days: float,
     block_days: int,
+    l2: float,
 ) -> LeagueReport:
     history = load_matches(conn, competition, train_from, test_from - timedelta(days=1))
     test = load_matches(conn, competition, test_from, test_to)
@@ -56,7 +57,7 @@ def evaluate_league(
     elo_fit_seconds = time.perf_counter() - started
     best_nll, params = starts[0]
     wf = walk_forward_dixon_coles(
-        history, test, half_life_days=half_life_days, block_days=block_days
+        history, test, half_life_days=half_life_days, block_days=block_days, l2=l2
     )
     return LeagueReport(
         competition=competition,
@@ -64,7 +65,7 @@ def evaluate_league(
         n_test=len(test),
         outcomes=outcomes,
         dc=wf.probs,
-        dc_frozen=predict_matches(fit(history, half_life_days=half_life_days), test)[0],
+        dc_frozen=predict_matches(fit(history, half_life_days=half_life_days, l2=l2), test)[0],
         elo=walk_forward_elo(history, test, params),
         market=np.array([p for p in market if p is not None]) if has_market.any() else None,
         has_market=has_market,
