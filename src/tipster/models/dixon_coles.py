@@ -8,6 +8,7 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import date
 
 import numpy as np
 from numpy.typing import NDArray
@@ -32,6 +33,7 @@ class Match:
     away_id: int
     home_goals: int
     away_goals: int
+    day: date | None = None
 
 
 @dataclass(frozen=True, eq=False)
@@ -43,17 +45,35 @@ class MatchData:
     away: Ints
     x: Ints
     y: Ints
+    w: Floats  # peso de cada partido (1 sin decaimiento)
 
 
-def prepare(matches: Sequence[Match]) -> MatchData:
+def decay_weights(days_ago: Floats | Ints, half_life_days: float) -> Floats:
+    """w = exp(−ξ·Δt) = 0,5^(Δt / vida media), con ξ = ln 2 / vida media (ADR 009)."""
+    return np.asarray(0.5 ** (np.asarray(days_ago, dtype=np.float64) / half_life_days))
+
+
+def prepare(matches: Sequence[Match], half_life_days: float | None = None) -> MatchData:
+    """Con `half_life_days`, cada partido pesa según su distancia al último partido de la lista."""
     team_ids = tuple(sorted({t for m in matches for t in (m.home_id, m.away_id)}))
     index = {team: i for i, team in enumerate(team_ids)}
+    if half_life_days is None:
+        weights = np.ones(len(matches))
+    else:
+        days = [m.day for m in matches]
+        if any(d is None for d in days):
+            raise FitError("El decaimiento temporal necesita la fecha de cada partido")
+        last = max(d for d in days if d is not None)
+        weights = decay_weights(
+            np.array([(last - d).days for d in days if d is not None]), half_life_days
+        )
     return MatchData(
         team_ids=team_ids,
         home=np.array([index[m.home_id] for m in matches], dtype=np.int64),
         away=np.array([index[m.away_id] for m in matches], dtype=np.int64),
         x=np.array([m.home_goals for m in matches], dtype=np.int64),
         y=np.array([m.away_goals for m in matches], dtype=np.int64),
+        w=weights,
     )
 
 
@@ -82,7 +102,7 @@ def log_likelihood(data: MatchData, a: Floats, d: Floats, gamma: float, rho: flo
         - mu
         - gammaln(data.y + 1)
     )
-    return float(terms.sum())
+    return float((data.w * terms).sum())
 
 
 def score_matrix(
@@ -124,13 +144,21 @@ def _objective(theta: Floats, data: MatchData) -> tuple[float, Floats]:
         ok & (x == 1) & (y == 0),
         ok & (x == 1) & (y == 1),
     )
-    g_h = x - lam + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m01, lam * rho / t, 0.0)
-    g_v = y - mu + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m10, mu * rho / t, 0.0)
+    w = data.w
+    g_h = w * (
+        x - lam + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m01, lam * rho / t, 0.0)
+    )
+    g_v = w * (y - mu + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m10, mu * rho / t, 0.0))
     g_rho = float(
-        np.where(m00, -lam * mu / t, 0.0).sum()
-        + np.where(m01, lam / t, 0.0).sum()
-        + np.where(m10, mu / t, 0.0).sum()
-        + np.where(m11, -1.0 / t, 0.0).sum()
+        (
+            w
+            * (
+                np.where(m00, -lam * mu / t, 0.0)
+                + np.where(m01, lam / t, 0.0)
+                + np.where(m10, mu / t, 0.0)
+                + np.where(m11, -1.0 / t, 0.0)
+            )
+        ).sum()
     )
     g_a = np.bincount(data.home, g_h, n) + np.bincount(data.away, g_v, n)
     g_d = np.bincount(data.away, g_h, n) + np.bincount(data.home, g_v, n)
@@ -149,6 +177,7 @@ class DixonColesFit:
     n_matches: int
     iterations: int
     max_gradient: float
+    half_life_days: float | None = None
 
     def knows(self, team_id: int) -> bool:
         return team_id in self.team_ids
@@ -173,11 +202,11 @@ class DixonColesFit:
         }
 
 
-def fit(matches: Sequence[Match]) -> DixonColesFit:
+def fit(matches: Sequence[Match], *, half_life_days: float | None = None) -> DixonColesFit:
     """MLE de una liga con L-BFGS-B. Lanza `FitError` si no converge o diverge (ADR 008)."""
     if not matches:
         raise FitError("No hay partidos con los que ajustar")
-    data = prepare(matches)
+    data = prepare(matches, half_life_days)
     n = len(data.team_ids)
     mean_home, mean_away = float(data.x.mean()), float(data.y.mean())
     if n < 2 or mean_home == 0 or mean_away == 0:
@@ -226,4 +255,5 @@ def fit(matches: Sequence[Match]) -> DixonColesFit:
         n_matches=len(matches),
         iterations=int(result.nit),
         max_gradient=max_gradient,
+        half_life_days=half_life_days,
     )

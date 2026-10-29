@@ -1,6 +1,7 @@
 """Núcleo de Dixon-Coles (ADR 008) con casos calculados a mano."""
 
 import math
+from datetime import date, timedelta
 
 import numpy as np
 import pytest
@@ -11,6 +12,7 @@ from tipster.models.dixon_coles import (
     DixonColesFit,
     Match,
     _objective,
+    decay_weights,
     fit,
     log_likelihood,
     prepare,
@@ -239,3 +241,83 @@ def test_un_equipo_sin_historial_se_trata_como_el_equipo_medio() -> None:
     assert base.knows(1)
     assert base.predict_proba(1, 99) == pytest.approx(known.predict_proba(1, 3))
     assert base.predict_proba(99, 2) == pytest.approx(known.predict_proba(3, 2))
+
+
+# -- Decaimiento temporal (ADR 009) ------------------------------------------------------------
+
+
+def test_pesos_de_decaimiento_con_vida_media_de_180_dias_a_mano() -> None:
+    w = decay_weights(np.array([0, 180, 360, 365, 10]), half_life_days=180)
+    assert w.tolist() == pytest.approx([1.0, 0.5, 0.25, 0.2452325, 0.9622238], abs=1e-7)
+    assert w[3] < w[4]  # el de hace 365 días pesa menos que el de hace 10
+
+
+def _dated_toy(step_days: int) -> list[Match]:
+    """Los 6 partidos del TOY: el primero el 2024-03-01 y cada siguiente `step_days` antes."""
+    last = date(2024, 3, 1)
+    return [
+        Match(
+            m.home_id, m.away_id, m.home_goals, m.away_goals, last - timedelta(days=step_days * k)
+        )
+        for k, m in enumerate(TOY)
+    ]
+
+
+def test_prepare_pesa_respecto_al_ultimo_partido_del_entrenamiento() -> None:
+    data = prepare(_dated_toy(10), half_life_days=10)
+    assert data.w.tolist() == pytest.approx([1.0, 0.5, 0.25, 0.125, 0.0625, 0.03125])
+
+
+def test_log_verosimilitud_ponderada_a_mano() -> None:
+    # pesos 1, ½, ¼, ⅛, 1/16, 1/32 sobre log P = −2,1267633 … −4,1063094, en el orden del TOY
+    data = prepare(_dated_toy(10), half_life_days=10)
+    value = log_likelihood(data, np.zeros(4), np.zeros(4), 0.2, RHO)
+    assert value == pytest.approx(-4.3245464, abs=1e-6)
+
+
+def test_sin_decaimiento_los_pesos_son_uno() -> None:
+    assert prepare(TOY).w.tolist() == [1.0] * 6
+
+
+def test_pedir_decaimiento_sin_fechas_es_un_error() -> None:
+    with pytest.raises(FitError, match="fecha"):
+        prepare(TOY, half_life_days=180)
+
+
+def test_el_gradiente_con_pesos_coincide_con_las_diferencias_finitas() -> None:
+    data = prepare(_dated_toy(30), half_life_days=90)
+    theta = np.array([0.2, -0.1, 0.15, 0.1, -0.05, 0.2, 0.0, 0.22, -0.08])
+    error = check_grad(lambda t: _objective(t, data)[0], lambda t: _objective(t, data)[1], theta)
+    assert error < 1e-5
+
+
+def _drifting_league() -> list[Match]:
+    """El equipo 1 es muy bueno en los primeros 200 días y muy malo en los últimos 200."""
+    rng = np.random.default_rng(7)
+    matches = []
+    for half, shift in ((0, 0.6), (1, -0.6)):
+        a = TRUE_A + np.array([shift, 0.0, 0.0, -shift])
+        for rep in range(25):
+            day = date(2023, 1, 1) + timedelta(days=200 * half + 8 * rep)
+            for h in range(4):
+                for v in range(4):
+                    if h == v:
+                        continue
+                    lam = math.exp(a[h] + TRUE_D[v] + TRUE_GAMMA)
+                    mu = math.exp(a[v] + TRUE_D[h])
+                    matches.append(
+                        Match(h + 1, v + 1, int(rng.poisson(lam)), int(rng.poisson(mu)), day)
+                    )
+    return matches
+
+
+def test_con_decaimiento_el_ataque_refleja_el_nivel_reciente() -> None:
+    matches = _drifting_league()
+    plain = fit(matches)
+    decayed = fit(matches, half_life_days=40)
+    # sin decaimiento promedia el equipo 1 (verdad: +0,3 y −0,3 → media 0,3); con decaimiento se
+    # acerca a su nivel actual (−0,3). Medido: 0,42 frente a −0,11.
+    assert plain.a[0] > 0.2
+    assert decayed.a[0] < 0.0
+    assert decayed.a[0] < plain.a[0] - 0.25
+    assert decayed.half_life_days == 40

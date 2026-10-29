@@ -38,8 +38,13 @@ def conn(tmp_path: Path) -> Iterator[sqlite3.Connection]:
 
 def test_load_matches_respeta_las_fechas_y_la_competicion(conn: sqlite3.Connection) -> None:
     matches = load_matches(conn, "premier", date(2016, 8, 1), date(2024, 7, 31))
-    assert matches == [Match(1, 2, 2, 1), Match(2, 1, 0, 0)]
+    assert matches == [
+        Match(1, 2, 2, 1, date(2016, 8, 13)),
+        Match(2, 1, 0, 0, date(2024, 7, 31)),
+    ]
 
 
 def test_load_matches_no_ve_nada_posterior_al_fin(conn: sqlite3.Connection) -> None:
-    assert load_matches(conn, "premier", date(2016, 8, 1), date(2024, 7, 30)) == [Match(1, 2, 2, 1)]
+    assert load_matches(conn, "premier", date(2016, 8, 1), date(2024, 7, 30)) == [
+        Match(1, 2, 2, 1, date(2016, 8, 13))
+    ]
