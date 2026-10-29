@@ -3,8 +3,9 @@
 **Fecha:** 2026-10-21 · **Estado:** completada con limitaciones (lee la §0 antes que nada).
 
 **Actualización 2026-10-29:** la §13 recoge la verificación de nivel A de The Odds API (criterio
-R4 de la Fase 1), hecha con llamadas reales. Las §0–§12 se dejan como se escribieron; donde la
-§13 las contradice o las completa, manda la §13.
+R4 de la Fase 1), hecha con llamadas reales, y la §14 la de football-data.co.uk (Fase 2). Las
+§0–§12 se dejan como se escribieron; donde la §13 o la §14 las contradicen o las completan, mandan
+ellas.
 
 ## 0. Limitaciones de esta verificación
 
@@ -432,3 +433,120 @@ Consecuencias, documentadas y **sin corregir** (el código no se ha tocado):
   recibir ningún 429).
 - Si los términos de The Odds API permiten dejar sus respuestas reales en un repositorio público
   (el §3 dice «Prohibido revender o redistribuir los datos como producto»).
+
+## 14. Verificación de nivel A de football-data.co.uk (Fase 2, 2026-10-29)
+
+**Cómo se obtuvo.** Descargas directas con `curl` desde la máquina local, sin clave, el
+2026-10-29 sobre las 09:40 UTC. Se bajaron unos 55 CSV de muestra (~7 MB, fuera de git) de las 6
+ligas, y la página de datos, `notes.txt` y `disclaimer.php`. No se descargó el histórico entero:
+la existencia del resto se comprobó con `HEAD`. Cada dato se cita con el fichero o la cabecera de
+donde sale.
+
+### 14.1 Acceso y estructura
+
+| Aspecto | Observado |
+|---|---|
+| URL | `https://www.football-data.co.uk/mmz4281/2425/E0.csv` responde **302** con `location: https://football-data.co.uk/mmz4281/2425/E0.csv` (cuerpo vacío). Hay que seguir la redirección (`-L`) o usar el dominio sin `www` |
+| Respuesta final | HTTP 200, `content-type: text/csv`; `E0` 24/25: 197 110 bytes, `last-modified: Sun, 25 May 2025 22:41:05 GMT` |
+| Cabeceras de límite | `x-ws-ratelimit-limit: 1000` y `x-ws-ratelimit-remaining: 999` en las respuestas. Qué cuenta (por hora, por día…) y qué pasa al superarlo: **NO VERIFICADO** |
+| Existencia | `HEAD` devuelve 200 para las **204** combinaciones (6 ligas × 34 temporadas, de 1993/94 a 2026/27). Solo se descargó y se leyó el contenido de las muestras |
+| Codificación | UTF-8 con BOM en las temporadas recientes (`efbbbf` en 24/25 y 26/27), sin BOM en 12/13: decodificar con `utf-8-sig` |
+| Fechas | `dd/mm/yy` en las muestras de 2012/13 y anteriores (`18/08/12`) y `dd/mm/yyyy` desde 2015/16; 2013/14 y 2014/15 sin muestrear. Hay columna `Time` en 24/25 (antes: NO VERIFICADO) |
+| Filas por temporada | 24/25: E0 380, SP1 380, SP2 462. 25/26: E0 380, SP1 380, SP2 462, I1 380, D1 306, F1 306. 26/27 (en curso, hasta el 25–26/10/2026): E0 80, SP1 99, SP2 121, I1 80, D1 63, F1 72 |
+
+**Cabecera de `E0` 24/25 (120 columnas):** `Div, Date, Time, HomeTeam, AwayTeam, FTHG, FTAG,
+FTR, HTHG, HTAG, HTR, Referee, HS, AS, HST, AST, HF, AF, HC, AC, HY, AY, HR, AR` y luego las
+cuotas: `B365H/D/A, BWH/D/A, BFH/D/A, PSH/D/A, WHH/D/A, 1XBH/D/A, MaxH/D/A, AvgH/D/A,
+BFEH/D/A, B365>2.5, B365<2.5, P>2.5, P<2.5, Max>2.5, Max<2.5, Avg>2.5, Avg<2.5, BFE>2.5,
+BFE<2.5, AHh, B365AHH/A, PAHH/A, MaxAHH/A, AvgAHH/A, BFEAHH/A` (apertura) y las mismas con «C»
+(cierre): `B365CH/D/A, BWC*, BFC*, PSCH/PSCD/PSCA, WHC*, 1XBC*, MaxCH/D/A, AvgCH/D/A,
+BFECH/BFECD/BFECA, B365C>2.5, B365C<2.5, PC>2.5, PC<2.5, MaxC>2.5, MaxC<2.5, AvgC>2.5,
+AvgC<2.5, BFEC>2.5, BFEC<2.5, AHCh, …`. `SP1` y `SP2` de 24/25 traen 119 columnas: las mismas
+sin `Referee`. Las columnas son por cuota, no por casa «viva»: que exista una columna no dice que
+tenga datos (ver §14.2).
+
+### 14.2 Cuotas de cierre de Pinnacle y Betfair Exchange (el punto crítico)
+
+Porcentaje de partidos con la columna rellena (`PSCH` = Pinnacle 1X2 local de cierre; `BFECH` =
+Betfair Exchange 1X2 local de cierre). `--` = la columna no existe en el fichero.
+
+| Temporada | Ligas comprobadas | `PSH`/`PSCH` | `BFEH`/`BFECH` |
+|---|---|---|---|
+| 2010/11 y 2011/12 | las 6 | `--` | `--` |
+| 2012/13 | las 6 | 100 % (Serie A 99 %) | `--` |
+| 2013/14 a 2023/24 | `E0`: 12/13, 15/16, 18/19, 21/22 y 23/24 medidas (100 %); 19/20, 20/21 y 22/23 solo con la columna presente, relleno sin medir. Las 6 ligas en 2023/24 (100 %) | 100 % | `--` |
+| 2024/25 | las 6 | 100 % | 100 % |
+| 2025/26 | las 6 | **42–55 %** (E0 55, SP1 50, SP2 42–43, I1 53, D1 49, F1 50) | 92–95 % |
+| 2026/27 (hasta el 26/10/2026) | las 6 | **la columna no existe** (114 columnas, sin `PS*` ni `P>2.5`) | 100 % (SP2: 94 % / 99 %) |
+
+**Pinnacle en 2025/26, mes a mes** (las 6 ligas sumadas; partidos con `PSCH` / partidos):
+
+| Mes | 2025-08 | 2025-09 | 2025-10 | 2025-11 | 2025-12 | 2026-01 | 2026-02 a 2026-05 |
+|---|---|---|---|---|---|---|---|
+| `PSCH` | 157/157 | 199/199 | 208/209 | 211/243 | 202/203 | 119/272 | **0** |
+
+- La **última fecha de 2025/26 con `PSCH` es el 14/01/2026**; desde febrero de 2026 no hay ni
+  `PSH` ni `PSCH` y en 2026/27 las columnas desaparecen. Esto precisa el punto 4 del §1 de la Fase 0, que lo
+  daba por «desaparecen tras el 08/01/2026» [C]: ahora es nivel A.
+- El sitio avisa (página de datos, nivel A): «Since 23/07/2025 Pinnacle's public API for odds
+  delivery has become unreliable meaning their odds are systematically out of date relative to
+  odds for other bookmakers, including both the pre-closing and closing odds. Consequently they
+  should be used with caution […], and are no longer being included for the calculation of market
+  average and maximum odds.» Que la columna esté rellena entre agosto y diciembre de 2025 **no
+  prueba que la cuota sea buena**; su calidad ahí es NO VERIFICADO. El corte seguro para el CLV
+  contra Pinnacle sigue siendo la temporada 2024/25, como decía PLAN §6.
+- El sitio dice que el cierre de Pinnacle está «back to 2012/13» («Closing home-draw-away odds are
+  also available for Pinnacle bookmaker only back to 2012/13»): coincide con lo observado.
+
+**Betfair Exchange (`BFE*`).**
+- Existe **solo desde 2024/25** (no hay `BFEH` ni `BFECH` en 2023/24 en ninguna de las 6 ligas).
+  Hoy son **2 temporadas completas más la actual**: poco histórico para calibrar.
+- 2025/26: `BFECH` casi completa hasta marzo de 2026 (237/237 en febrero, 219/219 en marzo) y
+  parcial después: 160/233 en abril y 180/242 en mayo.
+- Otro Betfair: `BFH/BFD/BFA` (y sus cierres `BFC*`) son «Betfair», no el exchange; las `BFD*` de
+  la cabecera de 26/27 son **Betfred** según `notes.txt`. No confundir con `BFE*`.
+- Cómo se mide el cierre (liquidez, momento) y si equivale al de Pinnacle: NO VERIFICADO.
+
+**Fallback `Max*`/`Avg*` (media y máximo del mercado).**
+- Columnas de cierre `MaxCH/D/A` y `AvgCH/D/A` (y `MaxC>2.5`, `AvgC>2.5`…) presentes desde
+  **2019/20** en `E0`, con 100 % de relleno en las temporadas medidas (21/22, 23/24, 24/25, 25/26 y 26/27). En las
+  otras 5 ligas, medido en 25/26 y 26/27 (100 %) y en 24/25 solo en SP1 y SP2; el resto, NO
+  VERIFICADO.
+- Según el sitio, desde el 23/07/2025 Pinnacle ya no entra en esas medias: hay una **ruptura de
+  serie** entre antes y después de esa fecha. Vienen de Betbrain (y de Oddsportal desde 2019/20),
+  es decir, un promedio de casas, no una referencia *sharp*.
+
+### 14.3 Cobertura de ligas y temporadas
+
+| Pregunta | Respuesta |
+|---|---|
+| ¿Las 6 ligas? | **Sí.** `E0` (Premier), `SP1` (LaLiga), `SP2` (Segunda), `I1` (Serie A), `D1` (Bundesliga) y `F1` (Ligue 1): 200 en las 34 temporadas, 1993/94 a 2026/27 |
+| ¿Hasta cuándo atrás? | Resultados desde 1993/94 (`9394_E0`: 28 columnas). Cuotas de casas desde 2000/01 según el sitio; **con cierre de Pinnacle desde 2012/13** (observado en las 6 ligas) y Max/Avg de cierre desde 2019/20 (observado en `E0`) |
+| ¿Estadísticas de partido? | Según el sitio, tiros, córners, faltas y tarjetas desde 2000/01 en las ligas principales |
+| ¿Champions? | **No consta.** La página de datos no cita ninguna competición UEFA y su lista de ligas (Inglaterra, Escocia, Alemania, Italia, España, Francia, Países Bajos, Bélgica, Portugal, Turquía, Grecia y las «extra») no la incluye. Confirma el BACKLOG nº 2 |
+| ¿Cuota de Ambos Marcan? | No hay columnas de BTTS en la cabecera de 24/25 (`E0`, `SP1`, `SP2`); el resto de temporadas, sin comprobar |
+
+### 14.4 Términos de uso (importante)
+
+- La página de datos dice: «What's more, it's all FREE, however its use is intended for private
+  individuals only, NOT commerical [sic] or data training products using automated bots/scrapers/AI.»
+- La página de descargo (`disclaimer.php`) es solo de responsabilidad («Football-Data cannot
+  guarantee the correctness of information contained within […]»). No trata la licencia de los
+  datos.
+- **Qué implica para el proyecto: NO VERIFICADO, y es una decisión del usuario.** El proyecto es
+  personal y no comercial, pero el módulo de descarga sería un script automatizado y los modelos
+  se *entrenan* con esos datos. La frase prohíbe «data training products using automated
+  bots/scrapers/AI» y no define «producto»: no puedo afirmar que un modelo estadístico propio de
+  uso privado lo infrinja, ni que no. El menú del sitio tiene un enlace «Contact» (no se ha abierto)
+  que sería la vía para preguntarlo.
+- Alternativa que el propio sitio ofrece de pago: una API por suscripción con
+  «TheStatsAPI»; sus condiciones y cobertura no se han revisado.
+
+### 14.5 Qué sigue NO VERIFICADO
+
+- La licencia real para entrenar modelos (14.4) y el límite de peticiones (14.1).
+- La calidad de las cuotas de Pinnacle de agosto a diciembre de 2025 (14.2).
+- Las columnas `Max*`/`Avg*` y `BFE*` en las otras 5 ligas antes de 2024/25.
+- El contenido de las temporadas no muestreadas (solo se comprobó que existen).
+- La actualización durante la temporada: cuándo se publica cada jornada y cuándo se rellenan las
+  cuotas de cierre.
