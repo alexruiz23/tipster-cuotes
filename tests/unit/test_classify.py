@@ -106,3 +106,29 @@ def test_formato_de_antiguedad(age: timedelta, text: str) -> None:
 def test_umbrales_incoherentes_se_rechazan() -> None:
     with pytest.raises(ValueError):
         Thresholds(ev_min=0.2, error_margin=0.15, max_quote_age=timedelta(minutes=10))
+
+
+def test_posible_error_se_mide_contra_p_mercado_aunque_p_final_sea_otra() -> None:
+    # Con p_final = 0,30 el EV es negativo, pero la cuota está un 15,86 % por encima de la justa
+    # del mercado: sigue siendo un posible error (ADR 012).
+    result = classify(
+        price=2.40, p_market=P, p_final=0.30, quote_age=FRESH, thresholds=THRESHOLDS, p_model=0.30
+    )
+    assert result.label is Label.POSIBLE_ERROR
+
+
+def test_value_se_mide_contra_p_final_aunque_p_mercado_no_vea_ventaja() -> None:
+    # Cuota 2,20: +6,21 % sobre la justa del mercado (value si p_final = p_mercado), pero con
+    # p_final = 0,55 el EV es +21 %: sigue siendo VALUE; el error se mide contra el mercado.
+    result = classify(
+        price=2.20, p_market=P, p_final=0.55, quote_age=FRESH, thresholds=THRESHOLDS, p_model=0.55
+    )
+    assert result.label is Label.VALUE
+    assert "21.00" in result.reasons[0]
+
+
+def test_sin_ventaja_con_p_final_baja_aunque_el_mercado_la_vea() -> None:
+    result = classify(
+        price=2.20, p_market=P, p_final=0.40, quote_age=FRESH, thresholds=THRESHOLDS, p_model=0.40
+    )
+    assert result.label is Label.SIN_VALOR  # EV = 0,40 · 2,20 − 1 = −12 %
