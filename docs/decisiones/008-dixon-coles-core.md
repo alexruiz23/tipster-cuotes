@@ -75,7 +75,9 @@ libres son `a_1…a_{n−1}`, `d_1…d_n`, `γ`, `ρ` (2n + 1 en total), y `a_n 
   por la reparametrización, `∂/∂a_k = g_{a_k} − g_{a_n}`. **Un test lo compara con diferencias
   finitas.**
 - **Criterios de convergencia** (provisionales; se ajustan con evidencia, nunca a mano):
-  `result.success`; `max|∇f| ≤ 1e-4`; `ρ` a más de `1e-6` de las cotas; τ > 0 en los marcadores bajos
+  `max|∇f| ≤ 1e-4` (optimalidad de primer orden, con `ftol = 0` para que el criterio de parada de
+  scipy no pare antes; el `success` de scipy no se exige porque L-BFGS-B termina con «ABNORMAL» en el
+  límite de precisión aun con el gradiente en ~1e-6: visto en 1 de 200 ajustes simulados); `ρ` a más de `1e-6` de las cotas; τ > 0 en los marcadores bajos
   observados; y ningún `|a_i|` o `|d_i|` mayor que 6 (λ fuera de [0,0025; 400] indica divergencia,
   típica de un equipo que nunca marca o nunca encaja). **Si falla cualquiera, `fit` lanza
   `FitError` con el motivo.** No hay reintentos silenciosos ni parámetros a mano.

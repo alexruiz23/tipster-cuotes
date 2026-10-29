@@ -26,6 +26,10 @@ class IngestError(TipsterError):
     """La ingesta del histórico encontró datos inconsistentes o un fichero alterado."""
 
 
+class FitError(TipsterError):
+    """El ajuste de un modelo no convergió o produjo parámetros inaceptables."""
+
+
 class ProviderError(TipsterError):
     """Error base de un proveedor de cuotas. `record` describe la petición fallida, si la hubo."""
 

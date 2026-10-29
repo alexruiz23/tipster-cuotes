@@ -1,4 +1,4 @@
-"""Núcleo de Dixon-Coles (ADR 008): verosimilitud, matriz de marcadores y, más adelante, el ajuste.
+"""Núcleo de Dixon-Coles (ADR 008): verosimilitud, matriz de marcadores y ajuste por MLE.
 
     λ = exp(a_local + d_visitante + γ)        μ = exp(a_visitante + d_local)
     P(x, y) = τ(x, y; λ, μ, ρ) · Poisson(x; λ) · Poisson(y; μ)
@@ -11,13 +11,19 @@ from dataclasses import dataclass
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.optimize import minimize
 from scipy.special import gammaln
+
+from tipster.errors import FitError
 
 Floats = NDArray[np.float64]
 Ints = NDArray[np.int64]
 
 TAU_FLOOR = 1e-12  # solo para que el optimizador pueda retroceder; el ajuste comprueba τ > 0
 MAX_GOALS = 20
+RHO_BOUND = 0.5
+MAX_ABS_PARAM = 6.0  # |a| o |d| mayor: λ fuera de [0,0025; 400], señal de divergencia
+GRADIENT_TOL = 1e-4  # provisional (ADR 008)
 
 
 @dataclass(frozen=True)
@@ -89,3 +95,135 @@ def score_matrix(
     x, y = np.meshgrid(goals, goals, indexing="ij")
     matrix = tau(x, y, lam, mu, rho) * np.outer(pmf_h, pmf_v)
     return matrix / matrix.sum() if normalize else matrix
+
+
+def _split(theta: Floats, n: int) -> tuple[Floats, Floats, float, float]:
+    """θ = [a_1…a_{n−1}, d_1…d_n, γ, ρ]; el último ataque cierra `mean(a) = 0`."""
+    free = theta[: n - 1]
+    return (
+        np.append(free, -free.sum()),
+        theta[n - 1 : 2 * n - 1],
+        float(theta[-2]),
+        float(theta[-1]),
+    )
+
+
+def _objective(theta: Floats, data: MatchData) -> tuple[float, Floats]:
+    """−ℓ y su gradiente analítico respecto a θ."""
+    n = len(data.team_ids)
+    a, d, gamma, rho = _split(theta, n)
+    lam = np.exp(a[data.home] + d[data.away] + gamma)
+    mu = np.exp(a[data.away] + d[data.home])
+    x, y = data.x, data.y
+    t = tau(x, y, lam, mu, rho)
+    ok = t > TAU_FLOOR
+    t = np.where(ok, t, 1.0)  # donde se recorta, log τ es constante: sin derivada
+    m00, m01, m10, m11 = (
+        ok & (x == 0) & (y == 0),
+        ok & (x == 0) & (y == 1),
+        ok & (x == 1) & (y == 0),
+        ok & (x == 1) & (y == 1),
+    )
+    g_h = x - lam + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m01, lam * rho / t, 0.0)
+    g_v = y - mu + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m10, mu * rho / t, 0.0)
+    g_rho = float(
+        np.where(m00, -lam * mu / t, 0.0).sum()
+        + np.where(m01, lam / t, 0.0).sum()
+        + np.where(m10, mu / t, 0.0).sum()
+        + np.where(m11, -1.0 / t, 0.0).sum()
+    )
+    g_a = np.bincount(data.home, g_h, n) + np.bincount(data.away, g_v, n)
+    g_d = np.bincount(data.away, g_h, n) + np.bincount(data.home, g_v, n)
+    grad = np.concatenate([g_a[:-1] - g_a[-1], g_d, [g_h.sum(), g_rho]])
+    return -log_likelihood(data, a, d, gamma, rho), -grad
+
+
+@dataclass(frozen=True, eq=False)
+class DixonColesFit:
+    team_ids: tuple[int, ...]
+    a: Floats
+    d: Floats
+    gamma: float
+    rho: float
+    log_likelihood: float
+    n_matches: int
+    iterations: int
+    max_gradient: float
+
+    def knows(self, team_id: int) -> bool:
+        return team_id in self.team_ids
+
+    def _strengths(self, team_id: int) -> tuple[float, float]:
+        """(ataque, debilidad defensiva); un equipo sin historial es el equipo medio (ADR 008)."""
+        if team_id not in self.team_ids:
+            return 0.0, float(self.d.mean())
+        i = self.team_ids.index(team_id)
+        return float(self.a[i]), float(self.d[i])
+
+    def predict_proba(self, home_id: int, away_id: int) -> dict[str, float]:
+        a_h, d_h = self._strengths(home_id)
+        a_v, d_v = self._strengths(away_id)
+        matrix = score_matrix(
+            float(np.exp(a_h + d_v + self.gamma)), float(np.exp(a_v + d_h)), self.rho
+        )
+        return {
+            "local": float(np.tril(matrix, -1).sum()),
+            "empate": float(np.trace(matrix)),
+            "visitante": float(np.triu(matrix, 1).sum()),
+        }
+
+
+def fit(matches: Sequence[Match]) -> DixonColesFit:
+    """MLE de una liga con L-BFGS-B. Lanza `FitError` si no converge o diverge (ADR 008)."""
+    if not matches:
+        raise FitError("No hay partidos con los que ajustar")
+    data = prepare(matches)
+    n = len(data.team_ids)
+    mean_home, mean_away = float(data.x.mean()), float(data.y.mean())
+    if n < 2 or mean_home == 0 or mean_away == 0:
+        raise FitError("Hacen falta al menos dos equipos y goles de local y de visitante")
+    theta0 = np.concatenate(
+        [np.zeros(n - 1), np.full(n, np.log(mean_away)), [np.log(mean_home / mean_away), 0.0]]
+    )
+    bounds = [(None, None)] * (2 * n) + [(-RHO_BOUND, RHO_BOUND)]
+    result = minimize(
+        _objective,
+        theta0,
+        args=(data,),
+        jac=True,
+        method="L-BFGS-B",
+        bounds=bounds,
+        options={"maxiter": 5000, "maxfun": 20000, "ftol": 0.0, "gtol": 1e-9},
+    )
+    a, d, gamma, rho = _split(result.x, n)
+    max_gradient = float(np.abs(result.jac).max())
+    low = (data.x <= 1) & (data.y <= 1)
+    lam, mu = np.exp(a[data.home] + d[data.away] + gamma), np.exp(a[data.away] + d[data.home])
+    min_tau = float(tau(data.x, data.y, lam, mu, rho)[low].min(initial=1.0))
+    problems = []
+    # El criterio es la optimalidad de primer orden: L-BFGS-B puede parar con «ABNORMAL» en el
+    # límite de precisión con el gradiente ya en ~1e-6, así que su mensaje solo se informa.
+    if max_gradient > GRADIENT_TOL:
+        problems.append(
+            f"el gradiente final es {max_gradient:.2e} (máximo {GRADIENT_TOL:.0e}); "
+            f"scipy: {result.message}"
+        )
+    if abs(abs(rho) - RHO_BOUND) < 1e-6:
+        problems.append(f"ρ = {rho:.4f} está en una cota")
+    if min_tau <= 0:
+        problems.append(f"τ no es positivo en algún marcador bajo (mínimo {min_tau:.3g})")
+    if max(np.abs(a).max(), np.abs(d).max()) > MAX_ABS_PARAM:
+        problems.append("algún ataque o defensa diverge (|valor| > 6)")
+    if problems:
+        raise FitError("; ".join(problems))
+    return DixonColesFit(
+        team_ids=data.team_ids,
+        a=a,
+        d=d,
+        gamma=gamma,
+        rho=rho,
+        log_likelihood=-float(result.fun),
+        n_matches=len(matches),
+        iterations=int(result.nit),
+        max_gradient=max_gradient,
+    )
