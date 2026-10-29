@@ -20,9 +20,11 @@ picks reales en papel.
 
 ## Estado
 
-**Fase 3 implementada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`,
-`clv`). Las llamadas reales de `close` y `settle` están **sin verificar** (solo proveedores
-simulados). Las fases siguientes no se han abierto.
+**Fase 3 cerrada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`, `clv`):
+implementada y validada con datos pasados (`w = 1`; el cierre de Pinnacle se mantiene bien calibrado en
+2024/25, [ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)). **Pendiente: paper trading en
+vivo** para medir ROI y CLV, que el histórico no permite. Las llamadas reales de `close` y `settle` están
+**sin verificar** (solo proveedores simulados). La Fase 4 (combinadas) no se ha abierto.
 
 **Fase 1 cerrada (2026-10-29).** F1–F10 y R1–R4 cumplidos. Las llamadas reales se hicieron en una
 máquina local con `ODDS_API_KEY`: un escaneo completo de 7 competiciones (118 partidos, 11 picks)

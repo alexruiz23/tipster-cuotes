@@ -176,6 +176,10 @@ tolerancia + nombres de equipo normalizados). **Aceptación:** `scan` muestra cu
 
 ## 7. Fase 3 — Probabilidad final, stake, picks y CLV
 
+> **Cerrada (2026-10-29): implementada y validada con datos pasados.** Pendiente de paper trading en
+> vivo para ROI y CLV (el histórico no tiene cuotas de otras casas ni cuotas tomadas). Resultados en el
+> [ADR 012](decisiones/012-fase-3-probabilidad-stake-clv.md).
+
 - **Resultado (ADR 012):** la validación 2021/22–2022/23 da `w = 1`, es decir `p_final = p_mercado`.
   El proyecto es un detector de valor frente a la referencia de Pinnacle, no un modelo que bate al
   mercado; Dixon-Coles queda congelado. Lo que sigue describe el diseño general.

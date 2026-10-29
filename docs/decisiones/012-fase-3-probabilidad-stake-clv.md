@@ -206,7 +206,7 @@ mejorarlo con información que el mercado no incorpore tan rápido (más datos, 
 se repetirá la selección con `tipster select-blend`, que se queda como herramienta de diagnóstico y no es
 necesaria en producción.
 
-**2024/25 no se evalúa para la mezcla.** Lo que se pidió medir allí (picks, ROI y CLV del escáner) no se
+**2024/25 no se evalúa para la mezcla** (la comprobación del mercado está en la sección siguiente). Lo que se pidió medir allí (picks, ROI y CLV del escáner) no se
 puede calcular con el histórico, porque solo contiene el cierre de Pinnacle 1X2: faltan las cuotas de
 otras casas (los picks) y las cuotas tomadas (el ROI y el CLV). Simular esas cuotas sería inventarlas.
 Además, Pinnacle no es fiable desde el 23/07/2025 (PLAN §6).
@@ -254,3 +254,40 @@ mercado gana en las dos temporadas y en las 6 ligas. La diferencia media es de +
   proveedores simulados. **NO VERIFICADOS con una llamada real:** la estructura de `/scores`, su coste y que
   Pinnacle actualice su cuota en la última media hora (el cierre con `last_update` de más de 30 minutos se
   guarda como no fiable y no entra en el CLV).
+
+## Calibración del cierre de Pinnacle en 2024/25 (2026-10-29; `scripts/calibracion_pinnacle.py`)
+
+Comprobación de que el mercado sigue siendo una buena «verdad» en el tramo ciego. **Solo mide: no cambia
+ningún hiperparámetro** (devig multiplicativo, sin calibrador, `w = 1`). Es la única lectura de 2024/25;
+queda gastada como test ciego del mercado.
+
+| Tramo | Partidos con cuota / total | Log-loss ± e.t. | Brier | Referencia «sin información» |
+|---|---|---|---|---|
+| 2021/22–2022/23 (validación) | 4 589 / 4 595 | 0,9872 ± 0,0066 | 0,5889 | 1,0726 |
+| **2024/25** | **2 224 / 2 224** | **0,9718 ± 0,0095** | **0,5786** | 1,0771 |
+| 2025/26 ago–dic 2025 | 987 / 1 011 | 0,9861 ± 0,0134 | 0,5877 | 1,0697 |
+| 2025/26 ene–mar 2026 | 571 / 728 | 0,9909 ± 0,0181 | 0,5921 | 1,0805 |
+| 2025/26 abr–jun 2026 | 65 / 487 | 0,9852 ± 0,0507 | 0,5878 | 1,0803 |
+
+(La referencia usa las frecuencias 1X2 de 2016/17–2023/24: 0,4436 / 0,2619 / 0,2945.)
+
+- **El mercado se mantiene en 2024/25.** 0,9718 es 0,015 mejor que en validación (≈ 1,3 errores típicos de
+  la diferencia, no significativo) y 0,105 mejor que no tener información. Por liga: Premier 0,9664, LaLiga
+  0,9467, Serie A 0,9513, Bundesliga 0,9885, Ligue 1 0,9567, Segunda 1,0119. Casualidad señalada: el
+  log-loss conjunto de 2023/24 era 0,9719; por liga los valores difieren, son datos distintos.
+- **Fiabilidad.** Tasa de empates prevista 0,259 y real 0,257. Sesgo medio (real − prevista): local −0,014 ±
+  0,010, empate −0,001 ± 0,009, visitante +0,016 ± 0,009; ninguno llega a 2 errores típicos. En los tramos
+  hay un patrón de una sola temporada: los visitantes con prevista 0,40–0,60 ganaron más de lo previsto
+  (0,445 → 0,514 con n = 247; 0,549 → 0,603 con n = 156) y los locales con prevista bajo 0,40 ganaron menos.
+  **No se corrige:** una temporada no basta para tocar nada, y no se usa para ajustar.
+- **Fecha del 23/07/2025.** **Ningún partido de 2024/25 es posterior a esa fecha** (la temporada termina en
+  mayo de 2025), así que no se puede segmentar dentro de 2024/25. Lo posterior es 2025/26. Allí **la
+  calidad de las cuotas que existen no se degrada de forma apreciable**: 0,9861 en ago–dic 2025 frente a
+  0,9718 (+0,014 con error típico de la diferencia ≈ 0,016), y los tramos siguientes se mueven dentro del
+  ruido. Lo que sí cae es la **cobertura**: 98 % en ago–dic, 78 % en ene–mar y 13 % en abr–jun
+  (por liga, en abril–mayo de 2026 casi todas tienen 0 cuotas). Como los partidos sin cuota no se puntúan,
+  una degradación de calidad ligada a esa ausencia **no se puede descartar**.
+- **Conclusión sobre el aviso del PLAN §6.** La prueba **no demuestra** que el aviso sea cierto en calidad,
+  pero tampoco lo descarta: lo que se observa es pérdida de cobertura en esta fuente (API-Football), no
+  una cuota peor. La referencia en vivo (The Odds API) es otra fuente y su frescura sigue **NO VERIFICADA**
+  (ver `close`). Se mantiene la regla: la comparación modelo-mercado no usa nada posterior al 23/07/2025.
