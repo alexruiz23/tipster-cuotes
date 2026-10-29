@@ -2,6 +2,10 @@
 
 **Fecha:** 2026-10-21 · **Estado:** completada con limitaciones (lee la §0 antes que nada).
 
+**Actualización 2026-10-29:** la §13 recoge la verificación de nivel A de The Odds API (criterio
+R4 de la Fase 1), hecha con llamadas reales. Las §0–§12 se dejan como se escribieron; donde la
+§13 las contradice o las completa, manda la §13.
+
 ## 0. Limitaciones de esta verificación
 
 1. **Red bloqueada.** La política de red del entorno en el que trabajo bloquea el acceso directo
@@ -304,3 +308,127 @@ Todas consultadas el 2026-10-21 a través del buscador; entre corchetes, el nive
 
 **Otros candidatos (backlog)**
 - [C] https://odds-api.io/sportsbooks
+
+## 13. Verificación de nivel A de The Odds API (R4, 2026-10-29)
+
+**Cómo se obtuvo.** `tipster scan --max-creditos 14` (ejecución 1 de `runs`) con las 7
+competiciones, `markets=h2h,totals`, `oddsFormat=decimal` y `bookmakers=` con 8 casas
+(`pinnacle`, `betfair_ex_eu`, `sport888`, `williamhill`, `marathonbet`, `winamax_fr`,
+`winamax_de`, `betfair_sb_uk`). Tres cosas condicionan lo que sigue:
+
+- Solo se vieron las 8 casas pedidas. **Qué otras casas devuelve cada liga: NO VERIFICADO**
+  (no se pidió `regions=`).
+- Es **una sola captura**, el jueves 29/10/2026 hacia las 09:24 UTC. No dice nada de otros días
+  ni de otras horas.
+- Evidencia: la tabla `provider_requests` (ids 1–8, `data/tipster.sqlite`) y las respuestas
+  crudas de `data/raw/the_odds_api/` (ambos en `.gitignore`). Una copia de LaLiga y Premier está
+  en `tests/fixtures/the_odds_api/real/` (R3), **solo en local y fuera de git** (BACKLOG nº 18).
+
+Las edades son `hora de inicio de la petición − last_update` de la propia respuesta.
+
+### 13.1 Créditos (nivel A)
+
+| Dato | Observado |
+|---|---|
+| `GET /v4/sports` | HTTP 200, `x-requests-last: 0`, `x-requests-used: 0`, `x-requests-remaining: 500` (llamada directa, 09:20:04 GMT); 87 deportes |
+| `GET /v4/sports/{sport}/odds` con 8 casas en `bookmakers`, `h2h,totals` | `x-requests-last` = **2** en las 7 peticiones (columna `cost`) |
+| Escaneo completo | `x-requests-used` pasa de 0 a **14**; `x-requests-remaining` queda en 486 (columnas `credits_used` y `credits_remaining`) |
+| Modelo de coste | Confirma el §3: mercados × grupos de 10 casas (2 × 1). Con `regions=eu,uk` serían 4 por liga (28), **no probado** |
+| Caché por TTL (R2) | Segundo `scan` a los ~1 min: 8 filas con `from_cache = 1` y `cost = 0` |
+
+### 13.2 Claves de las 7 competiciones (`/v4/sports`)
+
+Las 7 existen y llevan `active: true`. Ninguna clave alternativa hizo falta.
+
+| Competición | Clave | `title` en `/v4/sports` | Eventos devueltos |
+|---|---|---|---|
+| LaLiga | `soccer_spain_la_liga` | La Liga - Spain | 20 |
+| Segunda | `soccer_spain_segunda_division` | La Liga 2 - Spain | 11 |
+| Premier | `soccer_epl` | EPL | 21 |
+| Serie A | `soccer_italy_serie_a` | Serie A - Italy | 12 |
+| Bundesliga | `soccer_germany_bundesliga` | Bundesliga - Germany | 18 |
+| Ligue 1 | `soccer_france_ligue_one` | Ligue 1 - France | 18 |
+| Champions | `soccer_uefa_champs_league` | UEFA Champions League | 18 |
+
+Esto cierra el NO VERIFICADO del §3 sobre la Segunda y las claves de las otras cinco.
+
+### 13.3 Casas por liga (eventos con esa casa / eventos de la liga)
+
+| Casa (clave de la API) | LaLiga | Segunda | Premier | Serie A | Bundesliga | Ligue 1 | Champions |
+|---|---|---|---|---|---|---|---|
+| `pinnacle` | 20/20 | 11/11 | 20/21 | 12/12 | 18/18 | 18/18 | 18/18 |
+| `betfair_ex_eu` | 15/20 | 11/11 | 21/21 | 12/12 | 18/18 | 18/18 | 18/18 |
+| `marathonbet` | 20/20 | 11/11 | 20/21 | 12/12 | 18/18 | 18/18 | 18/18 |
+| `williamhill` | 20/20 | 11/11 | 20/21 | 12/12 | 18/18 | 17/18 | 18/18 |
+| `sport888` | 0 | 0 | 20/21 | 12/12 | 18/18 | 17/18 | 18/18 |
+| `winamax_fr` | 20/20 | 10/11 | 20/21 | 12/12 | 18/18 | 18/18 | 18/18 |
+| `winamax_de` | 20/20 | 10/11 | 20/21 | 12/12 | 18/18 | 18/18 | 18/18 |
+| `betfair_sb_uk` | 9/20 | 9/11 | 9/21 | 9/12 | 9/18 | 9/18 | 8/18 |
+
+- `betfair_ex_eu` es la clave real (la que usa `domain/bookmakers.py`); `betfair_ex_no_es` es solo
+  el id interno del proyecto.
+- Ninguna casa devuelta es de una web .es: las 8 son feeds no españoles (D1 sigue vigente). Si
+  existe algún feed .es en este proveedor, **NO VERIFICADO**.
+- `sport888` no aparece en LaLiga ni en Segunda aunque se pidió.
+
+### 13.4 Mercados y líneas de `totals`
+
+| Casa | Mercados que devuelve | Líneas (`point`) observadas |
+|---|---|---|
+| `pinnacle` | `h2h`, `totals` | **una línea por evento**, distinta según el partido: 2.0, 2.25, 2.5, 2.75, 3.0, 3.25, 3.5, 3.75, 4.0 |
+| `betfair_ex_eu` | `h2h`, **`h2h_lay`**; **sin `totals`** en ninguna liga | — |
+| `williamhill` | `h2h`, `totals` | solo 2.5 |
+| `marathonbet` | `h2h`, `totals` | 1.5, 2.5, 3.5, 4.5 (según el evento) |
+| `sport888`, `winamax_fr`, `winamax_de`, `betfair_sb_uk` | solo `h2h` | — |
+
+Eventos cuyo `totals` de Pinnacle es la línea 2.5, sobre el total de la liga:
+
+| LaLiga | Segunda | Premier | Serie A | Bundesliga | Ligue 1 | Champions | Total |
+|---|---|---|---|---|---|---|---|
+| 4/20 | 6/11 | 5/21 | 3/12 | 0/18 | 3/18 | 0/18 | **21/118** |
+
+Consecuencias, documentadas y **sin corregir** (el código no se ha tocado):
+
+1. El mapeo solo admite la línea 2.5 (`providers/the_odds_api/mapping.py`). Con la referencia
+   `pinnacle` > `betfair_ex_eu` (D2), el O/U 2.5 tiene referencia en 21 de 118 eventos. En el
+   escaneo real, los 97 restantes salieron «sin referencia válida». La Bundesliga y la Champions
+   no tuvieron ninguna. Ningún pick de la ejecución fue de totales.
+2. `betfair_ex_eu` no ofrece `totals`, así que no sirve de segunda referencia para O/U.
+3. Para tener 2.5 cuando la línea principal es otra, hay que usar `alternate_totals` (BACKLOG nº 5,
+   B): por evento, no por liga. **NO VERIFICADO** si sale a cuenta o cuánto cuesta.
+4. `h2h_lay` llega sin pedirlo y sin coste extra (`x-requests-last` = 2 igualmente). El cliente
+   lo ignora sin aviso. Que ignorarlo sea lo correcto, no se ha estudiado.
+
+### 13.5 Frescura de `pinnacle` y `betfair_ex_eu` (`last_update` del mercado)
+
+| Liga | `pinnacle` h2h / totals (s) | `betfair_ex_eu` h2h (s) |
+|---|---|---|
+| LaLiga | 19 | 43 |
+| Segunda | 17 | 15 |
+| Premier | 3–4 | 1 |
+| Serie A | 1 | 0 |
+| Bundesliga | 6 | 23–24 |
+| Ligue 1 | 4 | 3 |
+| Champions | 5 | 24 |
+
+- Todas por debajo de 1 minuto en esta captura, muy por debajo de `max_reference_age_minutes`
+  (10 min). Para comparar, el resto de casas va de 0 s a 111 s (`williamhill` en LaLiga: 111 s).
+- Dentro de cada liga, el `last_update` de una casa es **el mismo para todos los eventos**
+  (mínimo, mediana y máximo coinciden salvo ±1 s). Parece una marca por casa y deporte, no por
+  evento. Por tanto no demuestra que cada cuota concreta sea reciente. **NO VERIFICADO.**
+- La nota del §3 («Odds are from public website which may incur a delay») no se contradice ni se
+  confirma: una marca reciente no mide el retraso real de Pinnacle.
+- **No verificado:** la frescura en otros días u horas, y cuánto tarda una cuota en cambiar de
+  verdad.
+- Aparece una antigüedad de **−1 s** (`last_update` posterior a `captured_at`): efecto de definir
+  `captured_at` como el inicio del intento HTTP (ADR 006). Ver BACKLOG nº 14.
+
+### 13.6 Qué sigue NO VERIFICADO
+
+- Casas distintas de las 8 pedidas y cualquier feed .es (no se pidió `regions=`).
+- El coste de `regions=eu,uk` (28 créditos), el de `alternate_totals` y el de BTTS (§11, punto 3).
+- Los puntos 4–7 del §11 (OddsPapi, football-data.co.uk, DGOJ, comparación con webs .es).
+- Liquidez y límites por cuota, y el límite de peticiones por segundo (se usó 1 por segundo sin
+  recibir ningún 429).
+- Si los términos de The Odds API permiten dejar sus respuestas reales en un repositorio público
+  (el §3 dice «Prohibido revender o redistribuir los datos como producto»).
