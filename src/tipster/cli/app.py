@@ -12,13 +12,16 @@ from rich.table import Table
 
 from tipster import DISCLAIMER
 from tipster.cli.render import disclaimer, offline_banner, render_scan
+from tipster.cli.render_evaluation import render_evaluation
 from tipster.config import Settings
-from tipster.errors import ConfigError, IngestError
+from tipster.domain.competitions import COMPETITIONS
+from tipster.errors import ConfigError, IngestError, TipsterError
 from tipster.history.hf_dataset import ATTRIBUTION, DATASET_REVISION, fetch_tables
 from tipster.history.ingest import DEFAULT_ALIASES, ingest, load_aliases
 from tipster.history.matches import load_market_probs, load_matches
 from tipster.models.dixon_coles import fit
 from tipster.models.evaluation import brier, log_loss, outcome_index, paired_difference
+from tipster.models.report import evaluate_league
 from tipster.models.tuning import grid_search, predict_matches
 from tipster.providers.base import OddsProvider
 from tipster.providers.budget import CreditBudget
@@ -287,3 +290,56 @@ def tune_command(
                 f"Diferencia pareada de log-loss mejor − mercado: {mean:+.4f} ± {se:.4f}.",
                 markup=False,
             )
+
+
+DEFAULT_LEAGUES = ["premier", "laliga", "serie_a", "bundesliga", "ligue_1", "segunda"]
+
+
+@app.command("evaluate")
+def evaluate_command(
+    *,
+    league: Annotated[
+        list[str] | None, typer.Option("--league", help="Repetible; por defecto, las 6 ligas.")
+    ] = None,
+    train_from: Annotated[str, typer.Option(help="Primer día del historial.")] = "2016-08-01",
+    test_from: Annotated[str, typer.Option(help="Primer día de la prueba.")] = "2023-08-01",
+    test_to: Annotated[str, typer.Option(help="Último día de la prueba.")] = "2024-07-31",
+    scored_after: Annotated[
+        str, typer.Option(help="Los partidos anteriores solo calientan el Elo.")
+    ] = "2018-07-31",
+    half_life: Annotated[float, typer.Option(help="Vida media de Dixon-Coles, en días.")] = 730.0,
+    block_days: Annotated[int, typer.Option(min=1, help="Días por bloque de reajuste.")] = 1,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Walk-forward estricto: Dixon-Coles por bloques, Elo partido a partido y Pinnacle."""
+    console = Console()
+    settings = _settings(console, None, None)
+    leagues = league or DEFAULT_LEAGUES
+    unknown = [name for name in leagues if name not in COMPETITIONS]
+    if unknown:
+        console.print(f"[bold red]Competición desconocida:[/] {', '.join(unknown)}")
+        raise typer.Exit(EXIT_CONFIG)
+    first, last, tr_from, scored = (
+        date.fromisoformat(d) for d in (test_from, test_to, train_from, scored_after)
+    )
+    conn = connect(db or settings.db_path)
+    try:
+        reports = [
+            evaluate_league(
+                conn,
+                name,
+                train_from=tr_from,
+                test_from=first,
+                test_to=last,
+                scored_after=scored,
+                half_life_days=half_life,
+                block_days=block_days,
+            )
+            for name in leagues
+        ]
+    except TipsterError as exc:
+        console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(EXIT_RUN_ERROR) from exc
+    finally:
+        conn.close()
+    render_evaluation(console, reports, block_days)
