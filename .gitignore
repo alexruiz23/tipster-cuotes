@@ -21,3 +21,6 @@ data/
 *.sqlite
 *.sqlite3
 *.db
+
+# Fixture real de The Odds API: solo en local (términos del proveedor: no redistribuir)
+tests/fixtures/the_odds_api/real/
