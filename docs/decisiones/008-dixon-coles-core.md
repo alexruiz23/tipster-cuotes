@@ -182,8 +182,10 @@ número efectivo de partidos. Medido con la Hessiana numérica del coste (entren
   estimaciones son compatibles entre sí: fijar ρ = −0,03 en el ajuste con vida media 365 baja la
   log-verosimilitud solo 0,27 (2·Δ, frente a 3,84 del umbral al 95 %).
 - **Identificación:** la correlación de ρ con cualquier otro parámetro es ≤ 0,05 en todos los
-  ajustes, y su perfil de verosimilitud tiene una forma normal. No hay un problema de identificación,
-  solo pocos datos para un parámetro que afecta a cuatro marcadores.
+  ajustes. Sin decaimiento, el perfil de verosimilitud sigue la forma esperada: 2·ΔlogL a ρ = 0, −0,10
+  y −0,15 es 1,41, 8,4 y 24,8, frente a ((ρ − ρ̂)/error típico)² = 1,4, 8,3 y 24,2 (no se comprobó con
+  decaimiento). No hay indicios de un problema de identificación, solo pocos datos para un parámetro
+  que afecta a cuatro marcadores.
 - **Además podría haber un cambio real en el tiempo,** no demostrado. Sin decaimiento y por bloques
   de dos temporadas, el ρ de la Premier es −0,103, −0,064, −0,017 y +0,006 (cada uno ± 0,05); la
   diferencia entre el primero y el último es 0,109 ± 0,072. El decaimiento da más peso a los bloques

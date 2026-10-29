@@ -152,6 +152,6 @@ Diferencia pareada de log-loss respecto a «sin decaimiento» (negativo = mejor)
 | Vida media 730: log-loss | **0,9361** | 0,9361 | 0,9361 | 0,9362 | 0,9363 |
 
 Crece de forma monótona con λ₂: **la mejor sigue siendo 0**. En este dataset la regularización no
-aporta: el equipo medio para los equipos sin historial ya cubre el caso que la L2 debía resolver, y
-los demás tienen decenas de partidos. Se deja implementada (BACKLOG nº 26) pero **no se usa por
+aporta. Explicación posible, **no probada**: el equipo medio ya cubre a los equipos sin historial y
+el resto tiene decenas de partidos. Se deja implementada (BACKLOG nº 26) pero **no se usa por
 defecto** (`l2 = 0`).
