@@ -5,7 +5,14 @@ import math
 import numpy as np
 import pytest
 
-from tipster.models.evaluation import brier, log_loss, outcome_index, paired_difference
+from tipster.models.evaluation import (
+    brier,
+    draw_rate,
+    log_loss,
+    outcome_index,
+    paired_difference,
+    reliability_table,
+)
 
 
 def test_indice_del_resultado() -> None:
@@ -46,3 +53,34 @@ def test_diferencia_pareada_de_log_loss_a_mano() -> None:
     assert mean == pytest.approx(-0.3465736, abs=1e-7)
     assert se == pytest.approx(0.3465736, abs=1e-7)
     assert paired_difference(a, a, outcomes) == (0.0, 0.0)
+
+
+def test_tabla_de_fiabilidad_a_mano() -> None:
+    probs = np.array(
+        [
+            [0.1, 0.5, 0.4],
+            [0.15, 0.5, 0.35],
+            [0.55, 0.3, 0.15],
+            [0.65, 0.2, 0.15],
+            [0.9, 0.05, 0.05],
+        ]
+    )
+    outcomes = np.array([1, 0, 0, 2, 0])
+    table = reliability_table(probs, outcomes, outcome=0, edges=[0.0, 0.5, 1.0])
+    # tramo [0; 0,5): 0,10 y 0,15 → media 0,125; ganó el local 1 de 2 → 0,5
+    # tramo [0,5; 1]: 0,55, 0,65 y 0,90 → media 0,70; ganó el local 2 de 3 → 0,6667
+    assert [(b.low, b.high, b.n) for b in table] == [(0.0, 0.5, 2), (0.5, 1.0, 3)]
+    assert [b.mean_predicted for b in table] == pytest.approx([0.125, 0.7])
+    assert [b.observed for b in table] == pytest.approx([0.5, 2 / 3])
+
+
+def test_tramo_vacio_en_la_tabla_de_fiabilidad() -> None:
+    table = reliability_table(np.array([[0.2, 0.3, 0.5]]), np.array([0]), 0, [0.0, 0.1, 1.0])
+    assert table[0].n == 0
+    assert table[1].n == 1
+
+
+def test_tasa_de_empates_prevista_y_observada_a_mano() -> None:
+    probs = np.array([[0.4, 0.3, 0.3], [0.5, 0.2, 0.3], [0.2, 0.4, 0.4], [0.3, 0.3, 0.4]])
+    outcomes = np.array([1, 0, 2, 1])
+    assert draw_rate(probs, outcomes) == pytest.approx((0.3, 0.5))
