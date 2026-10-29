@@ -45,7 +45,8 @@ class MatchData:
     away: Ints
     x: Ints
     y: Ints
-    w: Floats  # peso de cada partido (1 sin decaimiento)
+    w: Floats  # peso de cada partido en los términos de Poisson (1 sin decaimiento)
+    w_tau: Floats  # peso en el término log τ (el de ρ); igual a `w` salvo con decay_rho=False
 
 
 def decay_weights(days_ago: Floats | Ints, half_life_days: float) -> Floats:
@@ -53,8 +54,13 @@ def decay_weights(days_ago: Floats | Ints, half_life_days: float) -> Floats:
     return np.asarray(0.5 ** (np.asarray(days_ago, dtype=np.float64) / half_life_days))
 
 
-def prepare(matches: Sequence[Match], half_life_days: float | None = None) -> MatchData:
-    """Con `half_life_days`, cada partido pesa según su distancia al último partido de la lista."""
+def prepare(
+    matches: Sequence[Match], half_life_days: float | None = None, decay_rho: bool = True
+) -> MatchData:
+    """Con `half_life_days`, cada partido pesa según su distancia al último partido de la lista.
+
+    Con `decay_rho=False`, el término de ρ (log τ) pesa 1 en todos los partidos (ADR 008).
+    """
     team_ids = tuple(sorted({t for m in matches for t in (m.home_id, m.away_id)}))
     index = {team: i for i, team in enumerate(team_ids)}
     if half_life_days is None:
@@ -74,6 +80,7 @@ def prepare(matches: Sequence[Match], half_life_days: float | None = None) -> Ma
         x=np.array([m.home_goals for m in matches], dtype=np.int64),
         y=np.array([m.away_goals for m in matches], dtype=np.int64),
         w=weights,
+        w_tau=weights if decay_rho else np.ones(len(matches)),
     )
 
 
@@ -93,16 +100,8 @@ def log_likelihood(data: MatchData, a: Floats, d: Floats, gamma: float, rho: flo
     eta_v = a[data.away] + d[data.home]
     lam, mu = np.exp(eta_h), np.exp(eta_v)
     log_tau = np.log(np.maximum(tau(data.x, data.y, lam, mu, rho), TAU_FLOOR))
-    terms = (
-        log_tau
-        + data.x * eta_h
-        - lam
-        - gammaln(data.x + 1)
-        + data.y * eta_v
-        - mu
-        - gammaln(data.y + 1)
-    )
-    return float((data.w * terms).sum())
+    poisson = data.x * eta_h - lam - gammaln(data.x + 1) + data.y * eta_v - mu - gammaln(data.y + 1)
+    return float((data.w * poisson + data.w_tau * log_tau).sum())
 
 
 def score_matrix(
@@ -144,14 +143,14 @@ def _objective(theta: Floats, data: MatchData, l2: float = 0.0) -> tuple[float, 
         ok & (x == 1) & (y == 0),
         ok & (x == 1) & (y == 1),
     )
-    w = data.w
-    g_h = w * (
-        x - lam + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m01, lam * rho / t, 0.0)
-    )
-    g_v = w * (y - mu + np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m10, mu * rho / t, 0.0))
+    w, wt = data.w, data.w_tau
+    tau_h = np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m01, lam * rho / t, 0.0)
+    tau_v = np.where(m00, -lam * mu * rho / t, 0.0) + np.where(m10, mu * rho / t, 0.0)
+    g_h = w * (x - lam) + wt * tau_h
+    g_v = w * (y - mu) + wt * tau_v
     g_rho = float(
         (
-            w
+            wt
             * (
                 np.where(m00, -lam * mu / t, 0.0)
                 + np.where(m01, lam / t, 0.0)
@@ -185,6 +184,7 @@ class DixonColesFit:
     max_gradient: float
     half_life_days: float | None = None
     l2: float = 0.0
+    decay_rho: bool = True
 
     def knows(self, team_id: int) -> bool:
         return team_id in self.team_ids
@@ -210,14 +210,18 @@ class DixonColesFit:
 
 
 def fit(
-    matches: Sequence[Match], *, half_life_days: float | None = None, l2: float = 0.0
+    matches: Sequence[Match],
+    *,
+    half_life_days: float | None = None,
+    l2: float = 0.0,
+    decay_rho: bool = True,
 ) -> DixonColesFit:
     """MLE de una liga con L-BFGS-B. Lanza `FitError` si no converge o diverge (ADR 008)."""
     if not matches:
         raise FitError("No hay partidos con los que ajustar")
     if l2 < 0:
         raise FitError(f"l2 debe ser >= 0 (recibido {l2})")
-    data = prepare(matches, half_life_days)
+    data = prepare(matches, half_life_days, decay_rho)
     n = len(data.team_ids)
     mean_home, mean_away = float(data.x.mean()), float(data.y.mean())
     if n < 2 or mean_home == 0 or mean_away == 0:
@@ -268,4 +272,5 @@ def fit(
         max_gradient=max_gradient,
         half_life_days=half_life_days,
         l2=l2,
+        decay_rho=decay_rho,
     )
