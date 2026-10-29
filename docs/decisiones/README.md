@@ -17,3 +17,4 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 | [009](009-decaimiento-l2-y-malla.md) | Decaimiento temporal, penalización L2 y malla de hiperparámetros | Aceptada |
 | [010](010-elo-davidson.md) | Elo con empate (Elo-Davidson) como segundo modelo | Aceptada |
 | [011](011-evaluacion-formal.md) | Evaluación formal con reajuste (walk-forward estricto) y cierre de la Fase 2 | Aceptada |
+| [012](012-fase-3-probabilidad-stake-clv.md) | Fase 3: probabilidad final, Kelly, picks y CLV | Aceptada |
