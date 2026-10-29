@@ -153,3 +153,105 @@ tal cual.
    temporadas, en lugar de fijar `H = 100` y `K` a mano?
 4. ¿Vale no calibrar todavía y publicar solo diagnósticos de calibración?
 5. ¿Vale que la comparación principal sea la variante congelada, con la en línea como secundaria?
+
+## Resultados (2026-10-29; entrenar/actualizar hasta 2023-07-31 y probar 2023/24)
+
+Hiperparámetros por máxima verosimilitud prequential (calentamiento 2016/17 y 2017/18; puntuación
+2018/19–2022/23; Nelder-Mead desde 3 inicios). `δ` es el ajuste de los equipos nuevos en puntos.
+«Dispersión» es la diferencia de −logL entre el peor y el mejor de los 3 inicios.
+
+| Liga | K | H | ν | carry | δ | −logL | Dispersión |
+|---|---|---|---|---|---|---|---|
+| Premier | 29,3 | 59,8 | 0,656 | 0,95 | −108,0 | 1 840,4 | **4,56** |
+| LaLiga | 15,2 | 94,5 | 0,874 | 0,99 | −116,6 | 1 900,2 | 0,02 |
+| Serie A | 22,5 | 50,2 | 0,809 | 0,96 | −142,4 | 1 857,9 | 0,37 |
+| Bundesliga | 21,1 | 67,3 | 0,725 | 0,94 | −165,1 | 1 531,5 | 0,00 |
+| Ligue 1 | 25,0 | 58,5 | 0,783 | 0,91 | −46,8 | 1 832,6 | 0,82 |
+| Segunda | 21,5 | 94,7 | 0,964 | 0,92 | −18,4 | 2 473,0 | 0,48 |
+
+**Los tres inicios no coinciden** (Premier 4,6 unidades de −logL), así que hay óptimos locales o una
+cresta plana, y `δ` es el parámetro peor identificado (entra un solo ascendido por temporada; en
+simulación su desviación era de 40 puntos). Se queda el mejor de los tres.
+
+**Log-loss (Brier)**, prueba 2023/24:
+
+| Liga | Dixon-Coles 730 | Elo congelado | Elo en línea | Pinnacle |
+|---|---|---|---|---|
+| Premier | 0,9361 (0,5517) | 0,9394 (0,5541) | 0,9295 (0,5477) | 0,8995 (0,5258) |
+| LaLiga | 0,9768 (0,5811) | 0,9826 (0,5860) | 0,9638 (0,5745) | 0,9510 (0,5659) |
+| Serie A | 1,0024 (0,6017) | 1,0028 (0,6021) | 0,9873 (0,5914) | 0,9639 (0,5751) |
+| Bundesliga | 0,9995 (0,5976) | 1,0387 (0,6228) | 0,9944 (0,5937) | 0,9460 (0,5596) |
+| Ligue 1 | 1,0315 (0,6193) | 1,0373 (0,6245) | 1,0296 (0,6196) | 1,0142 (0,6105) |
+| Segunda | 1,0533 (0,6367) | 1,0484 (0,6320) | 1,0542 (0,6365) | 1,0437 (0,6290) |
+| **Todas (2 224; Pinnacle 2 221)** | **1,0010 (0,5989)** | **1,0079 (0,6034)** | **0,9943 (0,5947)** | **0,9719 (0,5791)** |
+
+**Diferencia pareada de log-loss ± error típico** (negativo = el primero es mejor):
+
+| Comparación | Premier | LaLiga | Serie A | Bundesliga | Ligue 1 | Segunda | **Conjunto** |
+|---|---|---|---|---|---|---|---|
+| Elo congelado − Dixon-Coles | +0,0033 ± 0,0084 | +0,0057 ± 0,0072 | +0,0004 ± 0,0056 | **+0,0391 ± 0,0098** | +0,0059 ± 0,0078 | −0,0049 ± 0,0073 | **+0,0068 ± 0,0032** |
+| Elo en línea − Dixon-Coles | −0,0066 ± 0,0104 | −0,0130 ± 0,0078 | −0,0151 ± 0,0083 | −0,0052 ± 0,0109 | −0,0019 ± 0,0096 | +0,0009 ± 0,0086 | −0,0067 ± 0,0038 |
+| Elo en línea − Elo congelado | −0,0099 ± 0,0072 | −0,0187 ± 0,0059 | −0,0155 ± 0,0068 | −0,0443 ± 0,0086 | −0,0077 ± 0,0070 | +0,0058 ± 0,0052 | **−0,0135 ± 0,0027** |
+| Elo congelado − Pinnacle | +0,0398 ± 0,0120 | +0,0316 ± 0,0126 | +0,0389 ± 0,0110 | +0,0927 ± 0,0169 | +0,0231 ± 0,0111 | +0,0047 ± 0,0083 | +0,0359 ± 0,0049 |
+| Dixon-Coles − Pinnacle | +0,0365 ± 0,0120 | +0,0259 ± 0,0112 | +0,0385 ± 0,0109 | +0,0536 ± 0,0155 | +0,0173 ± 0,0108 | +0,0085 ± 0,0102 | +0,0289 ± 0,0048 |
+
+**Lectura.**
+- **El Elo congelado queda peor que Dixon-Coles:** +0,0068 ± 0,0032 (unos 2 errores típicos), y en la
+  Bundesliga claramente (+0,0391 ± 0,0098). Solo gana en Segunda (−0,0049 ± 0,0073, no concluyente) y
+  empata en Serie A. **Ninguno de los dos modelos se acerca a Pinnacle** (+0,029 y +0,036).
+- **Aviso de justicia:** la vida media de Dixon-Coles se eligió con 2023/24 y los hiperparámetros del
+  Elo solo con el entrenamiento, lo que favorece a Dixon-Coles.
+- **El Elo en línea mejora mucho respecto al congelado** (−0,0135 ± 0,0027, 5 errores típicos) y queda
+  algo mejor que Dixon-Coles congelado (−0,0067 ± 0,0038, 1,8 errores típicos). Pero usa los
+  resultados de la propia temporada y Dixon-Coles no. **Esa ventaja no es del modelo, sino de la
+  información**; la comparación justa es la evaluación formal con reajuste de ambos. La ganancia de
+  actualizar durante la temporada (0,0135) es mayor que cualquier diferencia entre los dos modelos,
+  así que el reajuste semanal de Dixon-Coles será el siguiente experimento importante.
+- La Bundesliga congelada se hunde (1,0387): probablemente por equipos que cambian de nivel dentro de
+  la temporada (no investigado). Con 3 equipos nuevos por liga y año, el `δ` de ese Elo (−165) también
+  es el más extremo.
+
+**Tasa de empates** (prevista media / observada), 2023/24:
+
+| Liga | Observada | Dixon-Coles | Elo congelado | Elo en línea | Pinnacle |
+|---|---|---|---|---|---|
+| Premier | 0,216 | 0,242 | 0,224 | 0,219 | 0,225 |
+| LaLiga | 0,282 | 0,248 | 0,273 | 0,271 | 0,263 |
+| Serie A | 0,295 | 0,246 | 0,261 | 0,258 | 0,263 |
+| Bundesliga | 0,263 | 0,253 | 0,246 | 0,244 | 0,228 |
+| Ligue 1 | 0,266 | 0,253 | 0,265 | 0,263 | 0,258 |
+| Segunda | 0,301 | 0,296 | 0,312 | 0,311 | 0,303 |
+| **Todas** | **0,272** | 0,258 | 0,266 | 0,264 | |
+
+Dixon-Coles subestima los empates en Serie A (0,246 frente a 0,295) y LaLiga; el Elo se acerca más a
+la tasa observada en las dos, pero tampoco la alcanza.
+
+**Fiabilidad** (6 ligas juntas, 2 224 partidos; probabilidad prevista media → frecuencia real, Elo
+congelado; tramos con menos de 20 partidos se leen con cuidado):
+
+| Resultado | Tramo | n DC | DC prev. → real | n Elo | Elo prev. → real |
+|---|---|---|---|---|---|
+| Local | 0,1–0,2 | 144 | 0,160 → 0,153 | 154 | 0,159 → 0,162 |
+| Local | 0,2–0,3 | 305 | 0,254 → 0,246 | 272 | 0,259 → 0,250 |
+| Local | 0,3–0,4 | 479 | 0,352 → 0,367 | 472 | 0,353 → 0,369 |
+| Local | 0,4–0,5 | 570 | 0,448 → 0,432 | 599 | 0,448 → 0,431 |
+| Local | 0,5–0,6 | 349 | 0,547 → 0,599 | 396 | 0,546 → 0,566 |
+| Local | 0,6–0,7 | 223 | 0,645 → 0,592 | 208 | 0,643 → 0,639 |
+| Local | 0,7–0,8 | 106 | 0,745 → 0,783 | 103 | 0,739 → 0,806 |
+| Empate | 0,1–0,2 | 226 | 0,167 → 0,146 | 134 | 0,180 → 0,142 |
+| Empate | 0,2–0,3 | 1 652 | 0,258 → 0,282 | 1 617 | 0,259 → 0,272 |
+| Empate | 0,3–0,4 | 340 | 0,321 → 0,312 | 473 | 0,315 → 0,309 |
+| Visitante | 0,1–0,2 | 418 | 0,156 → 0,141 | 454 | 0,157 → 0,137 |
+| Visitante | 0,2–0,3 | 686 | 0,251 → 0,236 | 701 | 0,250 → 0,258 |
+| Visitante | 0,3–0,4 | 480 | 0,347 → 0,315 | 452 | 0,346 → 0,314 |
+| Visitante | 0,4–0,5 | 265 | 0,447 → 0,438 | 269 | 0,443 → 0,416 |
+| Visitante | 0,5–0,6 | 162 | 0,544 → 0,537 | 149 | 0,548 → 0,564 |
+
+(Los tramos extremos con 35 partidos o menos, no mostrados, no permiten concluir nada.) Los dos modelos
+están razonablemente calibrados. Se repiten dos desvíos: ambos **sobreestiman** al visitante en el
+tramo 0,3–0,4 (0,347 → 0,315; 0,346 → 0,314) y la probabilidad de empate del tramo 0,1–0,2 (0,167 →
+0,146; 0,180 → 0,142), y ambos **subestiman** el empate en 0,2–0,3 (el Elo menos). No se aplicó
+calibración, según lo decidido.
+
+**Partidos de prueba con un equipo sin historial** (participaciones, Elo congelado): Premier 38,
+Ligue 1 34, Segunda 84, resto 0.
