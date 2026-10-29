@@ -2,15 +2,17 @@
 
 import sqlite3
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, timedelta
 
 import numpy as np
 from numpy.typing import NDArray
 
-from tipster.history.matches import load_market_probs, load_matches
+from tipster.errors import FitError
+from tipster.history.matches import load_market_odds, load_market_probs, load_matches
 from tipster.models.dixon_coles import Floats, Ints, fit
-from tipster.models.elo import EloParams, fit_params_starts
+from tipster.models.elo import EloParams, fit_params_starts, season_of
 from tipster.models.evaluation import outcome_index
 from tipster.models.tuning import predict_matches
 from tipster.models.walk_forward import walk_forward_dixon_coles, walk_forward_elo
@@ -75,4 +77,62 @@ def evaluate_league(
         dc_seconds=wf.seconds,
         elo_fit_seconds=elo_fit_seconds,
         unseen=wf.unseen,
+    )
+
+
+BLIND_FROM = date(2024, 8, 1)  # 2024/25 es el test ciego (ADR 007, 012): no se usa para elegir nada
+
+
+@dataclass(frozen=True, eq=False)
+class ValidationData:
+    raw_odds: Floats  # cierre crudo de Pinnacle 1X2, solo de los partidos con cuota
+    p_model: Floats  # Dixon-Coles reajustado diariamente (walk-forward), mismos partidos
+    outcomes: Ints
+    folds: Ints  # año de inicio de la temporada de cada partido
+    competitions: tuple[str, ...]
+    without_odds: int
+    seconds: float
+
+
+def build_validation(
+    conn: sqlite3.Connection,
+    competitions: Sequence[str],
+    *,
+    train_from: date,
+    val_from: date,
+    val_to: date,
+    half_life_days: float,
+    l2: float,
+    block_days: int,
+) -> ValidationData:
+    """Predicciones walk-forward de Dixon-Coles y cuotas de cierre para el tramo de validación."""
+    if val_to >= BLIND_FROM:
+        raise FitError(f"La validación no puede llegar a {BLIND_FROM}: 2024/25 es el test ciego")
+    started = time.perf_counter()
+    odds, probs, outcomes, folds, names = [], [], [], [], []
+    without = 0
+    for competition in competitions:
+        history = load_matches(conn, competition, train_from, val_from - timedelta(days=1))
+        matches = load_matches(conn, competition, val_from, val_to)
+        market = load_market_odds(conn, competition, val_from, val_to)
+        wf = walk_forward_dixon_coles(
+            history, matches, half_life_days=half_life_days, block_days=block_days, l2=l2
+        )
+        for match, row, p in zip(matches, market, wf.probs, strict=True):
+            if row is None or match.day is None:
+                without += 1
+                continue
+            odds.append(row)
+            probs.append(p)
+            outcomes.append(outcome_index(match.home_goals, match.away_goals))
+            folds.append(season_of(match.day))
+            names.append(competition)
+    return ValidationData(
+        raw_odds=np.array(odds),
+        p_model=np.array(probs),
+        outcomes=np.array(outcomes),
+        folds=np.array(folds),
+        competitions=tuple(names),
+        without_odds=without,
+        seconds=time.perf_counter() - started,
     )

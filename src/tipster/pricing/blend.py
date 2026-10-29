@@ -28,6 +28,18 @@ def blend_probs(
     return (mixed[0], mixed[1], mixed[2])
 
 
+def blend_array(
+    p_market: Floats, p_model: Floats, w_market: float, *, logarithmic: bool = False
+) -> Floats:
+    """`blend_probs` para matrices (n, 3)."""
+    if logarithmic:
+        raw = p_market**w_market * p_model ** (1 - w_market)
+        result: Floats = raw / raw.sum(axis=1, keepdims=True)
+        return result
+    mixed: Floats = w_market * p_market + (1 - w_market) * p_model
+    return mixed
+
+
 @dataclass(frozen=True)
 class Calibrator:
     """p'_k ∝ exp(β·ln p_k + b_k), con b_local = 0."""
@@ -86,12 +98,7 @@ def fit_market_weight(
     """
 
     def loss(w: float) -> float:
-        if logarithmic:
-            raw = p_market**w * p_model ** (1 - w)
-            mixed = raw / raw.sum(axis=1, keepdims=True)
-        else:
-            mixed = w * p_market + (1 - w) * p_model
-        return _log_loss_of(mixed, outcomes)
+        return _log_loss_of(blend_array(p_market, p_model, w, logarithmic=logarithmic), outcomes)
 
     w = float(minimize_scalar(loss, bounds=(minimum, 1.0), method="bounded").x)
     if w > SNAP_ONE:

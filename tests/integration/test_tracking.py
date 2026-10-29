@@ -17,7 +17,11 @@ from tipster.storage.sqlite import (
     SqlitePickRepository,
     SqliteRunRepository,
 )
-from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
+from tipster.storage.tracking import (
+    SqliteBankrollRepository,
+    SqliteBlendConfigRepository,
+    SqliteTrackingRepository,
+)
 
 
 def clock():  # type: ignore[no-untyped-def]
@@ -185,3 +189,12 @@ def test_las_columnas_de_mezcla_se_guardan_y_se_leen(conn: sqlite3.Connection) -
     assert (stored.opportunity.p_model_raw, stored.opportunity.w_market) == (0.48, 0.8)
     assert (stored.opportunity.model_name, stored.opportunity.model_version) == ("dixon_coles", "3")
     assert pick_id > 0
+
+
+def test_la_configuracion_de_mezcla_se_guarda_y_se_recupera(conn: sqlite3.Connection) -> None:
+    configs = SqliteBlendConfigRepository(conn, clock)
+    assert configs.latest() is None
+    first = configs.save({"w_market": 1.0, "devig": "multiplicativo"})
+    second = configs.save({"w_market": 0.8, "calibrator": {"beta": 0.9}})
+    assert second == first + 1
+    assert configs.latest() == (second, {"w_market": 0.8, "calibrator": {"beta": 0.9}})

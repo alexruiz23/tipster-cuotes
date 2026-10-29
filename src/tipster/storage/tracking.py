@@ -188,3 +188,26 @@ class SqliteTrackingRepository:
             "SELECT external_id, event_id FROM event_external_ids WHERE provider = ?", (provider,)
         ).fetchall()
         return {r[0]: r[1] for r in rows}
+
+
+class SqliteBlendConfigRepository:
+    """Configuraciones de mezcla elegidas en la validación; `model_version` de un pick es su id."""
+
+    def __init__(self, conn: sqlite3.Connection, clock: Callable[[], datetime]) -> None:
+        self._conn = conn
+        self._clock = clock
+
+    def save(self, settings: Mapping[str, object]) -> int:
+        cursor = self._conn.execute(
+            "INSERT INTO blend_configs (created_at, settings_json) VALUES (?, ?)",
+            (iso(self._clock()), json.dumps(settings, ensure_ascii=False)),
+        )
+        self._conn.commit()
+        assert cursor.lastrowid is not None
+        return cursor.lastrowid
+
+    def latest(self) -> tuple[int, dict[str, object]] | None:
+        row = self._conn.execute(
+            "SELECT id, settings_json FROM blend_configs ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        return None if row is None else (row[0], json.loads(row[1]))

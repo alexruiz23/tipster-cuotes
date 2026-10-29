@@ -42,3 +42,16 @@ def load_market_probs(
             p_home, p_draw, p_away = devig_multiplicative((home, draw, away))
             probs.append((p_home, p_draw, p_away))
     return probs
+
+
+def load_market_odds(
+    conn: sqlite3.Connection, competition_id: str, start: date, end: date
+) -> list[tuple[float, float, float] | None]:
+    """Cuotas crudas de cierre de Pinnacle 1X2 por partido, en el orden de `load_matches`."""
+    rows = conn.execute(
+        "SELECT pinnacle_home, pinnacle_draw, pinnacle_away FROM historical_matches"
+        " WHERE competition_id = ? AND match_date >= ? AND match_date <= ?"
+        " ORDER BY match_date, id",
+        (competition_id, start.isoformat(), end.isoformat()),
+    ).fetchall()
+    return [None if r[0] is None else (r[0], r[1], r[2]) for r in rows]

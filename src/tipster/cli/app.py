@@ -22,7 +22,8 @@ from tipster.history.ingest import DEFAULT_ALIASES, ingest, load_aliases
 from tipster.history.matches import load_market_probs, load_matches
 from tipster.models.dixon_coles import fit
 from tipster.models.evaluation import brier, log_loss, outcome_index, paired_difference
-from tipster.models.report import evaluate_league
+from tipster.models.report import build_validation, evaluate_league
+from tipster.models.selection import select_blend
 from tipster.models.tuning import grid_search, predict_matches
 from tipster.providers.base import OddsProvider
 from tipster.providers.budget import CreditBudget
@@ -40,7 +41,11 @@ from tipster.storage.sqlite import (
     SqliteResponseCache,
     SqliteRunRepository,
 )
-from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
+from tipster.storage.tracking import (
+    SqliteBankrollRepository,
+    SqliteBlendConfigRepository,
+    SqliteTrackingRepository,
+)
 from tipster.tracking.clv import summarize_clv
 
 EXIT_RUN_ERROR = 1
@@ -484,3 +489,91 @@ def clv_command(
         f"Mediana: {pct(summary.median)} · picks con CLV > 0: {summary.share_positive:.0%}",
         markup=False,
     )
+
+
+@app.command("select-blend")
+def select_blend_command(
+    *,
+    league: Annotated[
+        list[str] | None, typer.Option("--league", help="Repetible; por defecto, las 6 ligas.")
+    ] = None,
+    train_from: Annotated[str, typer.Option(help="Primer día del historial.")] = "2016-08-01",
+    val_from: Annotated[str, typer.Option(help="Primer día de la validación.")] = "2021-08-01",
+    val_to: Annotated[str, typer.Option(help="Último día de la validación.")] = "2023-07-31",
+    half_life: Annotated[float, typer.Option(help="Vida media de Dixon-Coles, en días.")] = 730.0,
+    l2: Annotated[float, typer.Option(min=0.0, help="λ₂ de Dixon-Coles.")] = 0.01,
+    block_days: Annotated[int, typer.Option(min=1, help="Días por bloque de reajuste.")] = 1,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Elige devig, calibrador y mezcla con la validación (nunca 2024/25) y guarda la elección."""
+    console = Console()
+    settings = _settings(console, None, None)
+    leagues = league or DEFAULT_LEAGUES
+    unknown = [name for name in leagues if name not in COMPETITIONS]
+    if unknown:
+        console.print(f"[bold red]Competición desconocida:[/] {', '.join(unknown)}")
+        raise typer.Exit(EXIT_CONFIG)
+    conn = connect(db or settings.db_path)
+    try:
+        data = build_validation(
+            conn,
+            leagues,
+            train_from=date.fromisoformat(train_from),
+            val_from=date.fromisoformat(val_from),
+            val_to=date.fromisoformat(val_to),
+            half_life_days=half_life,
+            l2=l2,
+            block_days=block_days,
+        )
+        decision = select_blend(data.raw_odds, data.p_model, data.outcomes, data.folds)
+        config_id = SqliteBlendConfigRepository(conn, _now).save(
+            {
+                **decision.to_json(),
+                "validation": {"from": val_from, "to": val_to, "leagues": leagues},
+                "dixon_coles": {"half_life_days": half_life, "l2": l2},
+            }
+        )
+    except TipsterError as exc:
+        console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(EXIT_RUN_ERROR) from exc
+    finally:
+        conn.close()
+    console.print(
+        f"Validación {val_from} a {val_to}: {decision.n_matches} partidos con cuota "
+        f"({data.without_odds} sin cuota descartados), {data.seconds:.0f} s.",
+        markup=False,
+    )
+    devigs = Table("devig de p_mercado", "log-loss del cierre", title="1. devig")
+    for name, loss in decision.devig_losses.items():
+        devigs.add_row(name, "falla en alguna cuota" if loss is None else f"{loss:.5f}")
+    console.print(devigs)
+    console.print(f"Elegido: {decision.devig.value}", markup=False)
+    gain = decision.calibrator_gain
+    console.print(
+        "2. calibrador (validación cruzada por temporada): "
+        + ("sin datos" if gain is None else f"calibrado − bruto = {gain[0]:+.5f} ± {gain[1]:.5f}")
+        + f" → {'ACTIVO' if decision.calibrator_active else 'no se usa'}"
+        + (
+            f" (β={decision.calibrator.beta:.3f}, b_empate={decision.calibrator.b_draw:+.3f}, "
+            f"b_visitante={decision.calibrator.b_away:+.3f})"
+            if decision.calibrator_active
+            else ""
+        ),
+        markup=False,
+    )
+    mix = Table("probabilidad", "log-loss", title="3. mezcla")
+    for name, loss in decision.losses.items():
+        mix.add_row(name, f"{loss:.5f}")
+    console.print(mix)
+    console.print(
+        f"Forma: {'logarítmica' if decision.logarithmic else 'lineal'} · peso del mercado "
+        f"w = {decision.w_market:.3f}"
+        + (" (el modelo no aporta: p_final = p_mercado)" if decision.w_market == 1.0 else "")
+        + f" · mezcla − mercado = {decision.gain_vs_market[0]:+.5f} "
+        f"± {decision.gain_vs_market[1]:.5f}",
+        markup=False,
+    )
+    console.print(
+        f"Umbral de REVISIÓN MANUAL (percentil 98): {decision.max_model_gap:.4f}", markup=False
+    )
+    console.print(f"Configuración guardada con id {config_id}", markup=False)
