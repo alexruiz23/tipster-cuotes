@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "httpx>=0.28.1",
+    "pyarrow>=26.0.0",
     "pydantic>=2.14.1",
     "pydantic-settings>=2.16.1",
     "scipy>=1.18.1",
@@ -47,7 +48,7 @@ files = ["src", "tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["scipy", "scipy.*"]
+module = ["scipy", "scipy.*", "pyarrow", "pyarrow.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

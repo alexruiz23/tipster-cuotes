@@ -1,6 +1,6 @@
-"""CLI de tipster-cuotes (Typer). En la Fase 1 solo existe `scan`."""
+"""CLI de tipster-cuotes (Typer): `scan` (Fase 1) e `ingest` (Fase 2)."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -11,7 +11,9 @@ from rich.console import Console
 from tipster import DISCLAIMER
 from tipster.cli.render import disclaimer, offline_banner, render_scan
 from tipster.config import Settings
-from tipster.errors import ConfigError
+from tipster.errors import ConfigError, IngestError
+from tipster.history.hf_dataset import ATTRIBUTION, DATASET_REVISION, fetch_tables
+from tipster.history.ingest import DEFAULT_ALIASES, ingest, load_aliases
 from tipster.providers.base import OddsProvider
 from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
@@ -143,3 +145,50 @@ def scan(
 
 def main() -> None:
     app()
+
+
+@app.command("ingest")
+def ingest_command(
+    from_year: Annotated[
+        int, typer.Option("--from", help="Primer año de temporada (desde el 1 de agosto).")
+    ] = 2016,
+    to_year: Annotated[
+        int, typer.Option("--to", help="Último año de temporada (hasta el 31 de julio siguiente).")
+    ] = 2025,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Descarga el histórico de Hugging Face y lo guarda en SQLite (idempotente)."""
+    console = Console()
+    settings = _settings(console, None, None)
+    conn = connect(db or settings.db_path)
+    try:
+        fetched = fetch_tables(settings.raw_dir / "huggingface")
+        for name, file in fetched.items():
+            state = "descargado" if file.downloaded else "ya estaba"
+            console.print(f"{name}.parquet {state} · sha256 {file.sha256[:16]}…", markup=False)
+        result = ingest(
+            conn,
+            next(iter(fetched.values())).path.parent,
+            date(from_year, 8, 1),
+            date(to_year + 1, 7, 31),
+            aliases=load_aliases(DEFAULT_ALIASES),
+            clock=lambda: datetime.now(UTC),
+        )
+    except IngestError as exc:
+        console.print(f"[bold red]{exc}[/]")
+        raise typer.Exit(EXIT_RUN_ERROR) from exc
+    finally:
+        conn.close()
+    pct = 100 * result.with_pinnacle / result.matches_loaded if result.matches_loaded else 0
+    console.print(f"Partidos leídos: {result.matches_read}", markup=False)
+    console.print(f"Duplicados eliminados: {result.duplicates_removed}", markup=False)
+    console.print(f"Partidos cargados: {result.matches_loaded}", markup=False)
+    console.print(
+        f"Partidos con cuota de Pinnacle completa: {result.with_pinnacle} ({pct:.1f} %)",
+        markup=False,
+    )
+    console.print(f"Años cubiertos: {result.first_date} a {result.last_date}", markup=False)
+    for competition, count in result.per_competition.items():
+        console.print(f"  {competition}: {count}", markup=False)
+    console.print(f"Revisión del dataset: {DATASET_REVISION}", markup=False)
+    console.print(ATTRIBUTION, markup=False)

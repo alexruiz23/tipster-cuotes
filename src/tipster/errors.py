@@ -22,6 +22,10 @@ class DevigError(TipsterError, ValueError):
     """Las cuotas no permiten obtener probabilidades válidas con el método pedido."""
 
 
+class IngestError(TipsterError):
+    """La ingesta del histórico encontró datos inconsistentes o un fichero alterado."""
+
+
 class ProviderError(TipsterError):
     """Error base de un proveedor de cuotas. `record` describe la petición fallida, si la hubo."""
 

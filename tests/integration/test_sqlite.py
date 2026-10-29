@@ -74,9 +74,10 @@ def test_las_migraciones_se_aplican_una_sola_vez(tmp_path: Path) -> None:
     path = tmp_path / "tipster.sqlite"
     connect(path).close()
     again = connect(path)
-    assert schema_versions(again) == [1]
+    assert schema_versions(again) == [1, 2]
     tables = {r[0] for r in again.execute("SELECT name FROM sqlite_master WHERE type='table'")}
     expected = {"runs", "provider_requests", "events", "event_external_ids", "odds_quotes", "picks"}
+    expected |= {"teams", "historical_matches"}
     assert expected <= tables
     again.close()
 
