@@ -59,3 +59,43 @@ días (0,9625); verosimilitud ponderada a mano con los 6 partidos; gradiente con
 finitas con pesos y L2; el decaimiento acerca los parámetros a lo reciente; L2 reduce un equipo con
 3 partidos y conserva el nivel de goles; log-loss `−ln 0,5 = 0,693147` y Brier `0,38` de
 `(0,5; 0,3; 0,2)` con resultado local.
+
+## Resultados (2026-10-29, Premier, entrenamiento 2016-08-01 a 2023-07-31, prueba 2023/24)
+
+`tipster tune`: 2 660 partidos de entrenamiento, 380 de prueba. 38 partidos de prueba (Luton, sin
+historial en la ventana) usan el equipo medio.
+
+| Vida media | λ₂ | Log-loss | Brier |
+|---|---|---|---|
+| **365 días** | **0** | **0,9336** | **0,5505** |
+| 365 | 0,1 | 0,9346 | 0,5511 |
+| 730 | 0 | 0,9361 | 0,5517 |
+| 180 | 0 | 0,9392 | 0,5550 |
+| sin decaimiento | 0 (modelo base del ADR 008) | 0,9466 | 0,5582 |
+| 90 | 0 | 0,9551 | 0,5667 |
+| *Cierre de Pinnacle sin margen* | | *0,8995* | *0,5258* |
+
+- **Gana vida media 365 y λ₂ = 0.** Con vida media corta (90) todas las celdas empeoran, y con λ₂ ≥ 1
+  también casi todas: en este reparto la penalización no ayuda. La mejor λ₂ es **el borde de la
+  malla** (0), así que no se ha comprobado si algo por debajo de 0,1 distinto de 0 mejoraría.
+- **La mejora no es concluyente.** Diferencia pareada de log-loss mejor − base: **−0,0130 con error
+  típico 0,0092** (1,4 errores típicos). Además es el mejor de 25 combinaciones evaluado sobre los
+  mismos 380 partidos, así que es optimista.
+- **El mercado sigue ganando:** mejor − mercado = +0,0341 (error típico 0,0116, unos 3 errores
+  típicos); base − mercado = +0,0471.
+- **Ajuste final** (entrenado hasta 2024-07-31, vida media 365, λ₂ = 0; 3 040 partidos, 0,19 s, 305
+  iteraciones, `max|∇| = 1,1e-5`): `γ = 0,2016` y **`ρ = −0,0014`** (con pesos iguales era −0,029, así
+  que ρ no es estable). Mejores ataques: Man City 0,708, Arsenal 0,572, Liverpool 0,569, Newcastle
+  0,431, Tottenham 0,430. Mejores defensas: Man City −0,479, Arsenal −0,348, Liverpool −0,241.
+
+Tres partidos de 2024/25 (no se usaron para elegir nada), local / empate / visitante:
+
+| Partido | Final | Base (ADR 008) | Pinnacle sin margen |
+|---|---|---|---|
+| Man City – Ipswich (equipo medio) | 0,838 / 0,110 / 0,051 | 0,826 / 0,119 / 0,055 | 0,881 / 0,088 / 0,031 |
+| Arsenal – Wolves | 0,761 / 0,157 / 0,082 | 0,623 / 0,222 / 0,155 | 0,841 / 0,107 / 0,052 |
+| Liverpool – Brentford | 0,686 / 0,179 / 0,135 | 0,700 / 0,178 / 0,122 | 0,797 / 0,125 / 0,078 |
+
+La brecha del Arsenal se acorta (victoria local 0,623 → 0,761 frente a 0,841). En Liverpool no
+mejora (0,700 → 0,686 frente a 0,797). Tres partidos no son una evaluación; **2024/25 completa
+sigue sin tocar** y se usa en la evaluación formal.
