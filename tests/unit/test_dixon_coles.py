@@ -321,3 +321,74 @@ def test_con_decaimiento_el_ataque_refleja_el_nivel_reciente() -> None:
     assert decayed.a[0] < 0.0
     assert decayed.a[0] < plain.a[0] - 0.25
     assert decayed.half_life_days == 40
+
+
+# -- Penalización L2 centrada (ADR 009) --------------------------------------------------------
+
+THETA = np.array([0.2, -0.1, 0.15, 0.1, -0.05, 0.2, 0.0, 0.22, -0.08])
+
+
+def test_la_penalizacion_l2_suma_a_mano_ataques_y_defensas_centradas() -> None:
+    data = prepare(TOY)
+    # a = (0,2; −0,1; 0,15; −0,25), d = (0,1; −0,05; 0,2; 0), media(d) = 0,0625
+    # Σ a² = 0,135 y Σ (d − media)² = 0,036875 → 2 · 0,171875 = 0,34375
+    plain, _ = _objective(THETA, data)
+    penalized, _ = _objective(THETA, data, 2.0)
+    assert penalized - plain == pytest.approx(0.34375, abs=1e-12)
+
+
+def test_el_gradiente_con_l2_coincide_con_las_diferencias_finitas() -> None:
+    data = prepare(_dated_toy(30), half_life_days=90)
+    error = check_grad(
+        lambda t: _objective(t, data, 3.0)[0], lambda t: _objective(t, data, 3.0)[1], THETA
+    )
+    assert error < 1e-5
+
+
+def _league_with_a_newcomer() -> list[Match]:
+    """4 equipos con 600 partidos y un quinto con 3 (marca mucho y encaja algo)."""
+    return [*simulate(seed=5, repeats=20), Match(5, 1, 3, 1), Match(2, 5, 1, 3), Match(5, 3, 2, 2)]
+
+
+def test_l2_reduce_los_parametros_de_un_equipo_con_pocos_partidos() -> None:
+    magnitudes = []
+    for l2 in (0.0, 1.0, 5.0, 10.0):
+        result = fit(_league_with_a_newcomer(), l2=l2)
+        i = result.team_ids.index(5)
+        magnitudes.append((abs(float(result.a[i])), abs(float(result.d[i] - result.d.mean()))))
+    attack, defence = zip(*magnitudes, strict=True)
+    assert list(attack) == sorted(attack, reverse=True)  # cada l2 mayor encoge más
+    assert list(defence) == sorted(defence, reverse=True)
+    assert attack[-1] < 0.5 * attack[0]
+    assert fit(_league_with_a_newcomer(), l2=5.0).a.mean() == pytest.approx(0.0, abs=1e-9)
+
+
+def test_l2_hace_converger_a_un_equipo_que_nunca_encaja() -> None:
+    matches = [
+        *simulate(seed=5, repeats=20),
+        Match(5, 1, 2, 0),
+        Match(2, 5, 0, 3),
+        Match(5, 3, 1, 0),
+    ]
+    with pytest.raises(FitError):
+        fit(matches)  # sin penalización, d_5 → −∞
+    result = fit(matches, l2=5.0)
+    assert abs(float(result.d[result.team_ids.index(5)])) < 6
+
+
+def test_l2_no_rebaja_el_nivel_medio_de_goles() -> None:
+    matches = simulate(seed=2024)
+    result = fit(matches, l2=50.0)
+    expected = sum(
+        math.exp(result.a[m.home_id - 1] + result.d[m.away_id - 1] + result.gamma)
+        + math.exp(result.a[m.away_id - 1] + result.d[m.home_id - 1])
+        for m in matches
+    )
+    observed = sum(m.home_goals + m.away_goals for m in matches)
+    # medido: centrada −0,0 %; con la penalización literal (d sin centrar) −0,4 %
+    assert expected == pytest.approx(observed, rel=0.001)
+
+
+def test_l2_negativa_es_un_error() -> None:
+    with pytest.raises(FitError, match="l2"):
+        fit(simulate(seed=1), l2=-1.0)

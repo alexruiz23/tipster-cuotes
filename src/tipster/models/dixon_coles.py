@@ -128,8 +128,8 @@ def _split(theta: Floats, n: int) -> tuple[Floats, Floats, float, float]:
     )
 
 
-def _objective(theta: Floats, data: MatchData) -> tuple[float, Floats]:
-    """−ℓ y su gradiente analítico respecto a θ."""
+def _objective(theta: Floats, data: MatchData, l2: float = 0.0) -> tuple[float, Floats]:
+    """−ℓ + λ₂·(Σ a² + Σ (d − media d)²) y su gradiente analítico respecto a θ (ADR 009)."""
     n = len(data.team_ids)
     a, d, gamma, rho = _split(theta, n)
     lam = np.exp(a[data.home] + d[data.away] + gamma)
@@ -162,8 +162,14 @@ def _objective(theta: Floats, data: MatchData) -> tuple[float, Floats]:
     )
     g_a = np.bincount(data.home, g_h, n) + np.bincount(data.away, g_v, n)
     g_d = np.bincount(data.away, g_h, n) + np.bincount(data.home, g_v, n)
-    grad = np.concatenate([g_a[:-1] - g_a[-1], g_d, [g_h.sum(), g_rho]])
-    return -log_likelihood(data, a, d, gamma, rho), -grad
+    grad = -np.concatenate([g_a[:-1] - g_a[-1], g_d, [g_h.sum(), g_rho]])
+    value = -log_likelihood(data, a, d, gamma, rho)
+    if l2:
+        d_centered = d - d.mean()
+        pen_a = 2.0 * l2 * a
+        value += l2 * float(a @ a + d_centered @ d_centered)
+        grad += np.concatenate([pen_a[:-1] - pen_a[-1], 2.0 * l2 * d_centered, [0.0, 0.0]])
+    return value, grad
 
 
 @dataclass(frozen=True, eq=False)
@@ -178,6 +184,7 @@ class DixonColesFit:
     iterations: int
     max_gradient: float
     half_life_days: float | None = None
+    l2: float = 0.0
 
     def knows(self, team_id: int) -> bool:
         return team_id in self.team_ids
@@ -202,10 +209,14 @@ class DixonColesFit:
         }
 
 
-def fit(matches: Sequence[Match], *, half_life_days: float | None = None) -> DixonColesFit:
+def fit(
+    matches: Sequence[Match], *, half_life_days: float | None = None, l2: float = 0.0
+) -> DixonColesFit:
     """MLE de una liga con L-BFGS-B. Lanza `FitError` si no converge o diverge (ADR 008)."""
     if not matches:
         raise FitError("No hay partidos con los que ajustar")
+    if l2 < 0:
+        raise FitError(f"l2 debe ser >= 0 (recibido {l2})")
     data = prepare(matches, half_life_days)
     n = len(data.team_ids)
     mean_home, mean_away = float(data.x.mean()), float(data.y.mean())
@@ -218,7 +229,7 @@ def fit(matches: Sequence[Match], *, half_life_days: float | None = None) -> Dix
     result = minimize(
         _objective,
         theta0,
-        args=(data,),
+        args=(data, l2),
         jac=True,
         method="L-BFGS-B",
         bounds=bounds,
@@ -251,9 +262,10 @@ def fit(matches: Sequence[Match], *, half_life_days: float | None = None) -> Dix
         d=d,
         gamma=gamma,
         rho=rho,
-        log_likelihood=-float(result.fun),
+        log_likelihood=log_likelihood(data, a, d, gamma, rho),
         n_matches=len(matches),
         iterations=int(result.nit),
         max_gradient=max_gradient,
         half_life_days=half_life_days,
+        l2=l2,
     )

@@ -29,7 +29,9 @@ nivel medio de goles (la restricción es solo `mean(a) = 0`, ADR 008), así que 
 empuja a la baja los goles esperados de **todos** los equipos y no solo de los extremos. Centrar la
 penalización deja libre el nivel medio y encoge cada equipo hacia la media de la liga, que es lo que
 se busca con los ascendidos. Un test comprueba que los goles esperados totales siguen igualando a los
-observados con una penalización fuerte.
+observados con una penalización fuerte. **Magnitud medida** (600 partidos simulados, `λ₂ = 50`):
+con la penalización centrada, 0,0 % de diferencia; con la literal, −0,4 %. Es pequeña en ese caso; con
+decaimiento corto (menos partidos efectivos) no se ha medido.
 
 La penalización no afecta a `γ` ni a `ρ`. El gradiente de la penalización es `2·λ₂·a` (propagado
 por la reparametrización de la suma cero) y `2·λ₂·(d − d̄)`.
