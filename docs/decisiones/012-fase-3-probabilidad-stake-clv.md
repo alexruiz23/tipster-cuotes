@@ -320,3 +320,21 @@ Pinnacle llevaron a tres cambios.
    ventana, esa cuota es su cierre. `closing_max_age_minutes` desaparece. El riesgo que asume la regla es que
    el precio de Pinnacle se mueva entre la captura y el inicio; la sonda de abajo mide cuánto.
 
+
+### Sonda de Pinnacle cerca del inicio (29/10/2026, solo lectura, 6 créditos)
+
+Cuota 1X2 de Pinnacle en Serie A (local / empate / visitante) a distintos minutos del inicio:
+
+| Partido | Minutos al inicio | Local | Empate | Visitante |
+|---|---|---|---|---|
+| Frosinone – Lecce | 139 | 1,70 | 4,33 | 4,71 |
+| | 35 | 1,77 | 4,17 | 4,45 |
+| | 15 | 1,76 | 4,16 | 4,51 |
+| | 5 | 1,76 | 4,16 | 4,51 |
+| Fiorentina – Atalanta | 273 | 2,35 | 3,75 | 3,00 |
+| | 150 | 2,38 | 3,84 | 2,91 |
+| | 15 | 2,35 | 3,79 | 2,99 |
+| | 5 | 2,35 | 3,79 | 2,99 |
+
+- **Pinnacle mueve su cuota a lo largo del día** y todavía a ~35 minutos del inicio, y **en estos dos partidos no se movió entre 15 y 5 minutos antes**. Entre los 35 y los 15 minutos el cambio fue pequeño (probabilidad justa del local 54,9 % → 55,2 %; cuota justa 1,82 → 1,81).
+- **Alcance:** 2 partidos, una liga, un día. No se puede distinguir «Pinnacle no se movió» de «la API no refrescó en esos minutos», aunque sí refresca en el resto del día. Es evidencia a favor de la regla de la ventana de 15 minutos, no una verificación; se completa con los cierres reales de `tipster close`.
