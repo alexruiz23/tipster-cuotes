@@ -79,6 +79,7 @@ def test_tune_muestra_la_malla_y_la_mejor_combinacion(db: Path) -> None:
         "Mejor combinación",
         "entrenamiento",
         "prueba",
+        "Diferencia pareada de log-loss mejor − base",
     ):
         assert text in result.output
     assert (

@@ -17,8 +17,9 @@ from tipster.errors import ConfigError, IngestError
 from tipster.history.hf_dataset import ATTRIBUTION, DATASET_REVISION, fetch_tables
 from tipster.history.ingest import DEFAULT_ALIASES, ingest, load_aliases
 from tipster.history.matches import load_market_probs, load_matches
-from tipster.models.evaluation import brier, log_loss, outcome_index
-from tipster.models.tuning import grid_search
+from tipster.models.dixon_coles import fit
+from tipster.models.evaluation import brier, log_loss, outcome_index, paired_difference
+from tipster.models.tuning import grid_search, predict_matches
 from tipster.providers.base import OddsProvider
 from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
@@ -264,5 +265,25 @@ def tune_command(
         if base is not None:
             console.print(
                 f"Modelo base (sin decaimiento, λ₂ = 0): log-loss {base.log_loss:.4f}.",
+                markup=False,
+            )
+        best_probs = predict_matches(
+            fit(train, half_life_days=best.half_life_days, l2=best.l2), test
+        )[0]
+        if base is not None and best is not base:
+            base_probs = predict_matches(fit(train), test)[0]
+            mean, se = paired_difference(best_probs, base_probs, outcomes)
+            console.print(
+                f"Diferencia pareada de log-loss mejor − base: {mean:+.4f} ± {se:.4f}.",
+                markup=False,
+            )
+        if has_market.any():
+            mean, se = paired_difference(
+                best_probs[has_market],
+                np.array([p for p in market if p is not None]),
+                outcomes[has_market],
+            )
+            console.print(
+                f"Diferencia pareada de log-loss mejor − mercado: {mean:+.4f} ± {se:.4f}.",
                 markup=False,
             )
