@@ -176,6 +176,9 @@ tolerancia + nombres de equipo normalizados). **Aceptación:** `scan` muestra cu
 
 ## 7. Fase 3 — Probabilidad final, stake, picks y CLV
 
+- **Resultado (ADR 012):** la validación 2021/22–2022/23 da `w = 1`, es decir `p_final = p_mercado`.
+  El proyecto es un detector de valor frente a la referencia de Pinnacle, no un modelo que bate al
+  mercado; Dixon-Coles queda congelado. Lo que sigue describe el diseño general.
 - `p_final = w · p_mercado + (1 − w) · p_modelo`, con w configurable y más peso al mercado por
   defecto. «REVISIÓN MANUAL» cuando |p_mercado − p_modelo| supere un umbral.
 - Kelly fraccionado: f* = (p·o − 1)/(o − 1). Caso a mano: p = 0.5 y o = 2.20 → f* = 1/12; con

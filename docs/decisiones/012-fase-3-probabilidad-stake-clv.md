@@ -196,6 +196,21 @@ casas .es (Fase 1b) y la notificación por Telegram (Fase 6).
 8. ¿Vale un bankroll de papel, dado que el programa nunca apuesta?
 9. ¿Vale evaluar 2024/25 una sola vez, con la configuración y el criterio de aceptación fijados aquí?
 
+## Configuración por defecto (decisión del usuario, 2026-10-29)
+
+**`w_mercado = 1,0` es la configuración por defecto y definitiva por ahora**, con devig multiplicativo y
+sin calibrador. `tipster scan` usa `p_final = p_mercado` sin necesitar ninguna configuración guardada.
+El sistema es un detector de valor frente a la referencia sharp de Pinnacle. **Dixon-Coles queda
+«congelado»**: el código y su evaluación se conservan, pero no entra en ningún pick, a la espera de poder
+mejorarlo con información que el mercado no incorpore tan rápido (más datos, xG, alineaciones). Entonces
+se repetirá la selección con `tipster select-blend`, que se queda como herramienta de diagnóstico y no es
+necesaria en producción.
+
+**2024/25 no se evalúa para la mezcla.** Lo que se pidió medir allí (picks, ROI y CLV del escáner) no se
+puede calcular con el histórico, porque solo contiene el cierre de Pinnacle 1X2: faltan las cuotas de
+otras casas (los picks) y las cuotas tomadas (el ROI y el CLV). Simular esas cuotas sería inventarlas.
+Además, Pinnacle no es fiable desde el 23/07/2025 (PLAN §6).
+
 ## Resultados de la selección en validación (2026-10-29; `tipster select-blend`)
 
 **Datos:** validación 2021-08-01 a 2023-07-31, 6 ligas, **4 589 partidos con cuota de cierre** (6 sin cuota

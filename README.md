@@ -7,7 +7,22 @@
 Tipster automático de fútbol que **solo recomienda** apuestas. Nunca las coloca, nunca inicia
 sesión en una casa de apuestas y nunca guarda credenciales de casas.
 
+## Qué es
+
+Un **sistema de detección de valor basado en la referencia sharp de Pinnacle**: toma la
+probabilidad sin margen del cierre/precio de Pinnacle como la mejor estimación disponible y busca
+casas cuya cuota se desvíe de ella a tu favor. **No tiene un modelo estadístico propio que bata al
+mercado**: Dixon-Coles y Elo se midieron contra el cierre de Pinnacle en walk-forward estricto y
+quedaron peor (≈ +0,023 de log-loss, unos 6 errores típicos), y la mezcla óptima da `w_mercado = 1`
+([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)). Dixon-Coles queda congelado.
+El beneficio de esto no está demostrado: el CLV y el ROI solo se pueden medir hacia adelante con
+picks reales en papel.
+
 ## Estado
+
+**Fase 3 implementada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`,
+`clv`). Las llamadas reales de `close` y `settle` están **sin verificar** (solo proveedores
+simulados). Las fases siguientes no se han abierto.
 
 **Fase 1 cerrada (2026-10-29).** F1–F10 y R1–R4 cumplidos. Las llamadas reales se hicieron en una
 máquina local con `ODDS_API_KEY`: un escaneo completo de 7 competiciones (118 partidos, 11 picks)
@@ -63,15 +78,15 @@ cualquier informe que lo use. Detalle en el [ADR 007](docs/decisiones/007-histor
 ```bash
 # Fase 2–3: evaluación, selección de la mezcla y seguimiento de picks
 uv run tipster evaluate            # Dixon-Coles y Elo frente a Pinnacle (walk-forward estricto)
-uv run tipster select-blend        # devig, calibrador y mezcla con la validación (no toca 2024/25)
+uv run tipster select-blend        # diagnóstico: devig, calibrador y mezcla en validación (siempre da w = 1 hoy; no toca 2024/25)
 uv run tipster close               # cierre de Pinnacle de los picks con stake a punto de empezar
 uv run tipster settle              # liquida con los resultados del proveedor (o --result EVENTO=GL-GV)
 uv run tipster clv                 # CLV de los picks con cierre fiable
 ```
 
 `tipster scan` muestra, por cada oportunidad: partido, mercado, selección, casa (con la
-jurisdicción de su feed), cuota, cuota justa, p_modelo («—» hasta la Fase 3), p_mercado, EV, stake
-(«—» hasta la Fase 3), etiqueta, referencia usada y hora de captura. Etiquetas:
+jurisdicción de su feed), cuota, cuota justa, p_modelo («—»: con `w = 1` no se usa), p_mercado, EV, stake
+(1/4 de Kelly con tope del 2 %, solo en los VALUE), etiqueta, referencia usada y hora de captura. Etiquetas:
 
 - **VALUE**: EV de al menos el mínimo configurado (3 % por defecto).
 - **POSIBLE ERROR · RIESGO DE ANULACIÓN**: cuota más de un 15 % por encima de la justa.
