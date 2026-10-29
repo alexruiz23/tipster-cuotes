@@ -99,7 +99,9 @@ class ScanService:
         tracking: SqliteTrackingRepository,
         settings: Settings,
         clock: Callable[[], datetime],
+        blend_version: str | None = None,
     ) -> None:
+        self._blend_version = blend_version
         self._provider = provider
         self._events = events
         self._odds = odds
@@ -281,6 +283,7 @@ class ScanService:
             devig_method=reference.method,
             p_market=p_market,
             w_market=1.0,  # sin modelo (ADR 012): p_final = p_mercado
+            model_version=self._blend_version,
             p_final=p_market,
             fair_odds=1 / p_market,
             ev=p_market * quote.price - 1,

@@ -115,3 +115,15 @@ def test_el_limite_de_perdida_diaria_apaga_las_recomendaciones(conn: sqlite3.Con
     values = _value(second)
     assert values and all(o.stake == 0.0 for o in values)
     assert all(EXTRA_LOSS in o.reasons[-1] for o in values)
+
+
+def test_los_picks_guardan_la_version_de_la_mezcla_y_w_1_sin_modelo(
+    conn: sqlite3.Connection,
+) -> None:
+    provider = TheOddsApiProvider(OfflineFetcher(FIXTURES))
+    result = _service(conn, provider, _settings(), blend_version="7").run()
+    assert result.picks
+    assert {(p.opportunity.model_version, p.opportunity.w_market, p.opportunity.model_name)
+            for p in result.picks} == {("7", 1.0, None)}  # fmt: skip
+    rows = conn.execute("SELECT DISTINCT model_version, w_market, model_name FROM picks").fetchall()
+    assert [tuple(r) for r in rows] == [("7", 1.0, None)]

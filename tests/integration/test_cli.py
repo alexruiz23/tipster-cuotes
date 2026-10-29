@@ -7,6 +7,7 @@ import pytest
 from typer.testing import CliRunner
 
 from tipster.cli.app import app
+from tipster.storage.db import connect
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "the_odds_api" / "sintetico"
 WIDE = {"COLUMNS": "260"}
@@ -75,3 +76,18 @@ def test_competicion_concreta() -> None:
     assert code == 0
     assert "Local Prueba FC" not in out
     assert "Picks: 0" in out
+
+
+def test_scan_se_niega_si_la_mezcla_pide_un_modelo_que_no_existe(tmp_path: Path) -> None:
+    db = tmp_path / "t.sqlite"
+    conn = sqlite3.connect(db)
+    connect(db).close()
+    conn.execute(
+        "INSERT INTO blend_configs (created_at, settings_json) VALUES ('2026-10-29T00:00:00+00:00',"
+        " '{\"w_market\": 0.8}')"
+    )
+    conn.commit()
+    conn.close()
+    code, out = _scan("--offline", str(FIXTURES), "--db", str(db))
+    assert code == 2
+    assert "proveedor del modelo" in out

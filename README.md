@@ -60,6 +60,15 @@ El histórico viene de [eatpizzanot/soccer-dataset](https://huggingface.co/datas
 (CC-BY-4.0), compilado a partir de API-Football y football-data.co.uk. Hay que citarlos en
 cualquier informe que lo use. Detalle en el [ADR 007](docs/decisiones/007-historico-y-dixon-coles.md).
 
+```bash
+# Fase 2–3: evaluación, selección de la mezcla y seguimiento de picks
+uv run tipster evaluate            # Dixon-Coles y Elo frente a Pinnacle (walk-forward estricto)
+uv run tipster select-blend        # devig, calibrador y mezcla con la validación (no toca 2024/25)
+uv run tipster close               # cierre de Pinnacle de los picks con stake a punto de empezar
+uv run tipster settle              # liquida con los resultados del proveedor (o --result EVENTO=GL-GV)
+uv run tipster clv                 # CLV de los picks con cierre fiable
+```
+
 `tipster scan` muestra, por cada oportunidad: partido, mercado, selección, casa (con la
 jurisdicción de su feed), cuota, cuota justa, p_modelo («—» hasta la Fase 3), p_mercado, EV, stake
 («—» hasta la Fase 3), etiqueta, referencia usada y hora de captura. Etiquetas:

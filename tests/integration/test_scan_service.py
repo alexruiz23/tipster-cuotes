@@ -55,6 +55,7 @@ def _service(
     provider: object,
     settings: Settings,
     now: datetime = CAPTURED,
+    blend_version: str | None = None,
 ) -> ScanService:
     def clock() -> datetime:
         return now
@@ -69,6 +70,7 @@ def _service(
         tracking=SqliteTrackingRepository(conn),
         settings=settings,
         clock=clock,
+        blend_version=blend_version,
     )
 
 

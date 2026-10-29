@@ -195,3 +195,47 @@ casas .es (Fase 1b) y la notificación por Telegram (Fase 6).
 7. ¿Vale `/scores` de The Odds API como fuente de resultados (a verificar) con inserción manual de respaldo?
 8. ¿Vale un bankroll de papel, dado que el programa nunca apuesta?
 9. ¿Vale evaluar 2024/25 una sola vez, con la configuración y el criterio de aceptación fijados aquí?
+
+## Resultados de la selección en validación (2026-10-29; `tipster select-blend`)
+
+**Datos:** validación 2021-08-01 a 2023-07-31, 6 ligas, **4 589 partidos con cuota de cierre** (6 sin cuota
+descartados): 2 294 de 2021/22 y 2 295 de 2022/23. `p_modelo` es Dixon-Coles reajustado cada día
+(walk-forward, historial desde 2016-08-01, vida media 730 días, `λ₂ = 0,01`; 94 s). **2024/25 no se ha
+leído** (el comando rechaza una validación que llegue a esa fecha). Configuración guardada con id 1.
+
+| Decisión | Resultado |
+|---|---|
+| **Devig de `p_mercado`** | **multiplicativo**. Log-loss del cierre: multiplicativo 0,98719 · aditivo 0,98719 · power 0,98719 · Shin 0,98716. Shin gana por 0,00003, lejos de un error típico: se mantiene el más simple |
+| **Calibrador** | **no se usa**. Validación cruzada por temporada: calibrado − bruto = −0,00104 ± 0,00110 (menos de un error típico) |
+| **Forma de la mezcla** | lineal (la logarítmica no mejora) |
+| **Peso del mercado `w`** | **1,000**: `p_final = p_mercado` |
+| **Umbral de REVISIÓN MANUAL** | 0,1730 (percentil 98 de `|p_mercado − p_modelo|`) |
+
+**El modelo no aporta nada sobre el cierre de Pinnacle.** El óptimo de `w` sin recortar también es 1,000
+(la regla de fijarlo en 1 por encima de 0,95 no interviene): el log-loss de la mezcla lineal sube de forma
+monótona al restar peso al mercado:
+
+| `w` (mercado) | 1,00 | 0,95 | 0,90 | 0,80 | 0,70 | 0,60 |
+|---|---|---|---|---|---|---|
+| lineal | 0,98719 | 0,98736 | 0,98763 | 0,98846 | 0,98968 | 0,99129 |
+| logarítmica | 0,98719 | 0,98738 | 0,98768 | 0,98865 | 0,99008 | 0,99197 |
+
+Log-loss del mercado frente al del modelo, por temporada (2021/22: 0,98705 frente a 1,01299; 2022/23:
+0,98734 frente a 1,01102) y por liga (mercado / modelo): Premier 0,9494 / 0,9840 · LaLiga 0,9829 / 1,0010 ·
+Serie A 0,9742 / 0,9950 · Bundesliga 0,9884 / 1,0033 · Ligue 1 0,9850 / 1,0018 · Segunda 1,0328 / 1,0715. El
+mercado gana en las dos temporadas y en las 6 ligas. La diferencia media es de +0,025 de log-loss.
+
+**Consecuencias.**
+- Con `w = 1` los picks son **comparación de precios** de otras casas con la cuota justa de Pinnacle, sin
+  contribución del modelo. `tipster scan` ya funciona así y guarda `model_version` (id de la configuración)
+  y `w_mercado = 1`. Si una configuración futura pidiera `w < 1`, el escaneo **se niega** hasta que exista el
+  proveedor del modelo (Dixon-Coles sobre los eventos en vivo, con los alias de nombres de The Odds API).
+- El criterio de aceptación de 1.3 («la mezcla debe mejorar al mercado en 2023/24 y no empeorarlo en
+  2024/25; si no, `w = 1`») ya se resuelve con la validación: `w = 1` hace la mezcla idéntica al mercado, así
+  que **2024/25 no tiene nada que decidir para la mezcla** y se conserva ciega para un modelo que sí aporte.
+- Los pesos se ajustaron con el cierre, que es el precio más informado (ver 1.2). Con precios anteriores al
+  cierre el modelo podría pesar más; no hay datos para comprobarlo hasta tener capturas en vivo.
+- El cierre capturado por `tipster close` y el servicio de resultados de `tipster settle` están probados con
+  proveedores simulados. **NO VERIFICADOS con una llamada real:** la estructura de `/scores`, su coste y que
+  Pinnacle actualice su cuota en la última media hora (el cierre con `last_update` de más de 30 minutos se
+  guarda como no fiable y no entra en el CLV).

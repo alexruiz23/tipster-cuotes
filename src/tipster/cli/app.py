@@ -145,6 +145,14 @@ def scan(
         )
         provider = TheOddsApiProvider(http)
 
+    blend = SqliteBlendConfigRepository(conn, clock).latest()
+    if blend is not None and float(str(blend[1]["w_market"])) < 1.0:
+        conn.close()
+        console.print(
+            "[bold red]La configuración de mezcla pide usar el modelo (w < 1) y el proveedor del "
+            "modelo aún no está implementado.[/]"
+        )
+        raise typer.Exit(EXIT_CONFIG)
     try:
         result = ScanService(
             provider=provider,
@@ -156,6 +164,7 @@ def scan(
             tracking=SqliteTrackingRepository(conn),
             settings=settings,
             clock=clock,
+            blend_version=None if blend is None else str(blend[0]),
         ).run()
     finally:
         conn.close()
