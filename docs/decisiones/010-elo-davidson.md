@@ -208,8 +208,7 @@ simulación su desviación era de 40 puntos). Se queda el mejor de los tres.
   actualizar durante la temporada (0,0135) es mayor que cualquier diferencia entre los dos modelos,
   así que el reajuste semanal de Dixon-Coles será el siguiente experimento importante.
 - La Bundesliga congelada se hunde (1,0387): probablemente por equipos que cambian de nivel dentro de
-  la temporada (no investigado). Con 3 equipos nuevos por liga y año, el `δ` de ese Elo (−165) también
-  es el más extremo.
+  la temporada (no investigado). El `δ` de la Bundesliga (−165) es además el más extremo de las seis ligas.
 
 **Tasa de empates** (prevista media / observada), 2023/24:
 
