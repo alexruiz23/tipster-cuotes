@@ -75,7 +75,7 @@ Tasa de empates (prevista media / observada):
 | Segunda | 0,301 | 0,292 | 0,311 | 0,303 |
 | **Todas** | **0,272** | 0,255 | 0,264 | |
 
-Cómputo (portátil con macOS, un hilo): Dixon-Coles 765 ajustes en **62,3 s** (0,07–0,11 s por ajuste;
+Cómputo (máquina local con macOS, un hilo): Dixon-Coles 765 ajustes en **62,3 s** (0,07–0,11 s por ajuste;
 Premier 8,5 s, LaLiga 11,5, Serie A 14,5, Bundesliga 7,4, Ligue 1 7,2, Segunda 13,2) y la estimación
 del Elo (3 inicios por liga) 119,7 s (15–23 s por liga): unos 3 minutos en total.
 
@@ -86,11 +86,11 @@ del Elo (3 inicios por liga) 119,7 s (15–23 s por liga): unos 3 minutos en tot
   signos mixtos y ninguna diferencia supera 1,1 errores típicos. Hay un matiz que favorece a Dixon-Coles:
   su vida media se eligió con 2023/24 y los hiperparámetros del Elo no.
 - **Reajustar importa más que el modelo:** Dixon-Coles mejora 0,0061 ± 0,0029 (2,1 errores típicos)
-  respecto a ajustarlo una vez; en Premier, LaLiga, Serie A y Bundesliga mejora más de 0,011 y en Ligue 1 y
+  respecto a ajustarlo una vez; en Premier, LaLiga, Serie A y Bundesliga mejora 0,011 o más y en Ligue 1 y
   Segunda no mejora (+0,0028 y +0,0072, no concluyentes).
 - **Distancia al mercado:** Dixon-Coles queda a **+0,0229 ± 0,0040 (5,7 errores típicos)** y el Elo a
   **+0,0223 ± 0,0037 (6,0)** de Pinnacle; por liga, entre 1,5 y 3,4 errores típicos para Dixon-Coles
-  (Segunda 1,5, LaLiga 1,6, Ligue 1 2,0, Premier 2,7, Bundesliga 3,2, Serie A 3,4). El mercado gana a los
+  (Segunda 1,5, LaLiga 1,6, Ligue 1 2,0, Premier 2,8, Bundesliga 3,2, Serie A 3,4). El mercado gana a los
   dos en todas las ligas, como se esperaba.
 - **Empates:** los dos subestiman la tasa observada (0,255 y 0,264 frente a 0,272), sobre todo
   Dixon-Coles en LaLiga (0,256 frente a 0,282) y Serie A (0,249 frente a 0,295). Pinnacle falla igual en Serie
