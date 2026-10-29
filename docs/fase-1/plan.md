@@ -244,9 +244,14 @@ Además de tests, ruff, mypy, CI, README y push a `main`:
 
 ## 9. Estado
 
-**Fase 1 construida, no cerrada: pendiente de red y clave para cerrar R1–R4** (2026-10-21).
-Durante toda la construcción la red de este entorno bloqueó `api.the-odds-api.com` y no hubo
-`ODDS_API_KEY`, así que se trabajó como D4 = B.
+**Fase 1 cerrada (2026-10-29).** F1–F10 y R1–R4 cumplidos. Hasta el 2026-10-21 la fase estaba
+construida pero no cerrada: durante la construcción la red de aquel entorno bloqueó
+`api.the-odds-api.com` y no hubo `ODDS_API_KEY` (D4 = B). R1–R4 se cerraron el 2026-10-29 en una
+máquina local con red y clave.
+
+**Aviso:** el O/U 2.5 tiene muy poca cobertura de referencia (Pinnacle solo da la línea 2.5 en 21
+de 118 eventos; Betfair no da totales). Es una limitación del proveedor, no del código (BACKLOG
+nº 13, para la Fase 2 o para cuando se evalúe `alternate_totals`).
 
 | # | Estado | Cómo comprobarlo |
 |---|---|---|
@@ -260,16 +265,16 @@ Durante toda la construcción la red de este entorno bloqueó `api.the-odds-api.
 | F8 | Cumplido | Tests de clave en http, config y scan; gitleaks sin fugas en historial y árbol (ver incidencia) |
 | F9 | Cumplido | `uv run tipster scan --offline tests/fixtures/the_odds_api/sintetico` |
 | F10 | Cumplido | `.env.example`, README |
-| R1 | **Abierto** | Necesita red y clave |
-| R2 | **Abierto** | Necesita red y clave (el comportamiento está probado con transporte simulado en F7) |
-| R3 | **Abierto** | Necesita red y clave; mientras, las fixtures son sintéticas y su estructura NO VERIFICADA |
-| R4 | **Abierto** | Necesita red y clave; las claves de 6 de las 7 competiciones siguen NO VERIFICADAS |
+| R1 | Cumplido | `tipster scan --max-creditos 14` real: estado ok, 8 peticiones, 14 créditos, 486 restantes (`x-requests-remaining`), 118 partidos, 2924 cuotas, 11 picks. Tabla `provider_requests`, ejecución 1 |
+| R2 | Cumplido | Segundo `scan` ~1 min después (`--max-creditos 0`): 8 de 8 filas con `from_cache = 1` y `cost = 0`, 0 créditos. Ejecución 3 de `runs` |
+| R3 | Cumplido, con matiz | Se grabó una fixture real de LaLiga y Premier; la estructura coincide con la sintética (añade el mercado `h2h_lay` de `betfair_ex_eu`). **Vive solo en local y fuera de git** (`tests/fixtures/the_odds_api/real/`, `.gitignore`, BACKLOG nº 18): los términos del proveedor no permiten redistribuirla. `tests/integration/test_the_odds_api_formato.py` corre con la sintética y con la real si existe. En CI solo corre con la sintética |
+| R4 | Cumplido | [verificación §13](../fase-0/verificacion-proveedores.md): las 7 claves existen y están activas; casas por liga; líneas de totales; frescura de `pinnacle` y `betfair_ex_eu` (0–43 s en una captura) |
 
-**Para cerrar la fase:** abrir `api.the-odds-api.com` en la red del entorno, definir
-`ODDS_API_KEY` como secreto y, en la sesión siguiente: `uv run tipster scan` (R1); repetirlo antes
-de 60 s (R2); grabar y sanear una respuesta en `tests/fixtures/the_odds_api/real/` y pasar los
-tests de parseo con ella (R3); actualizar la verificación de proveedores a nivel A (R4). Coste
-estimado: unos 14 créditos por escaneo completo.
+**Cierre (2026-10-29).** Créditos de la sesión: 28 de 500 (14 del primer R1, 14 del R1 repetido
+junto a R2; el primer R2 no llegó dentro del TTL de 60 s y se repitió encadenado). Quedan 472.
+Hallazgos que no cambian el código y quedan en el [BACKLOG](../BACKLOG.md): totales (nº 13),
+antigüedad «hace -1 s» (nº 14), rango de `uv-build` (nº 15), tabla de 80 columnas (nº 16) y fallo
+del `.pth` en macOS (nº 17).
 
 **Incidencia de CI resuelta.** La ejecución de `8cf20f7` falló en el job de gitleaks por la clave
 falsa de un test (`generic-api-key`). Se reprodujo en local con gitleaks 8.30.1, binario

@@ -9,11 +9,14 @@ sesión en una casa de apuestas y nunca guarda credenciales de casas.
 
 ## Estado
 
-**Fase 1 construida, no cerrada: pendiente de red y clave para cerrar R1–R4.** Todo lo que no
-depende de una llamada real a The Odds API está hecho y probado con fixtures. Los cuatro criterios
-que exigen llamada real siguen abiertos porque la red de este entorno bloquea el proveedor y no hay
-`ODDS_API_KEY` (D4 = B). Detalle y estado de cada criterio en
+**Fase 1 cerrada (2026-10-29).** F1–F10 y R1–R4 cumplidos. Las llamadas reales se hicieron en una
+máquina local con `ODDS_API_KEY`: un escaneo completo de 7 competiciones (118 partidos, 11 picks)
+costó 14 créditos, y 28 en toda la sesión de cierre. Detalle y evidencia de cada criterio en
 [docs/fase-1/plan.md §9](docs/fase-1/plan.md#9-estado).
+
+> **Limitación del proveedor, no del código:** el O/U 2.5 tiene muy poca cobertura de referencia.
+> Pinnacle solo da la línea 2.5 en 21 de 118 eventos y Betfair no da totales
+> ([verificación §13.4](docs/fase-0/verificacion-proveedores.md)). Pendiente: BACKLOG nº 13.
 
 **Fase 0: puerta de salida no cumplida.** Sin código no había tests, ruff, mypy ni CI que ejecutar
 (detalle en [PLAN §0](docs/PLAN.md#0-estado-real-de-la-puerta-de-salida-de-la-fase-0)).
