@@ -98,8 +98,11 @@ cada fase (handoff) está en su plan; el de la Fase 1, en
   Hill, Marathonbet, Betfair y Winamax, que pueden no coincidir con la web española.
 - Pinnacle cerró su API pública el 23/07/2025; The Odds API la obtiene de su web pública con
   posible retraso, y en el histórico de football-data.co.uk no es fiable desde esa fecha.
-- La estructura de las respuestas de The Odds API y las claves de 6 de las 7 competiciones están
-  sin verificar con una llamada real.
+- El O/U 2.5 tiene muy poca cobertura de referencia: Pinnacle solo da la línea 2.5 en 21 de 118
+  eventos y Betfair no da totales (limitación del proveedor; BACKLOG nº 13).
+- La estructura de las respuestas y las 7 claves de competición están verificadas con una llamada
+  real (2026-10-29), pero en una sola captura: la frescura y las casas por liga en otros días u
+  horas son NO VERIFICADO ([§13](docs/fase-0/verificacion-proveedores.md)).
 - The Odds API no da liquidez ni límites: toda cuota lleva «liquidez desconocida».
 - No hay ninguna fuente verificada de cuotas de Ambos Marcan para fútbol europeo, ni histórico
   verificado de la Champions.

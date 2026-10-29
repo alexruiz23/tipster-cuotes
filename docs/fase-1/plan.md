@@ -240,7 +240,7 @@ Además de tests, ruff, mypy, CI, README y push a `main`:
   consumo de créditos queda en `provider_requests` y `runs`. Declarado en README y `config.py`.
 - **Backup de `data/tipster.sqlite`:** no se hace backup en la F1; se decide en la F3, cuando haya
   picks con resultado que merezca conservar.
-- **Decisiones:** ADR 001–005 en «Aceptada» y PLAN §3 con D1–D7 confirmadas.
+- **Decisiones:** ADR 001–006 en «Aceptada» y PLAN §3 con D1–D7 confirmadas.
 
 ## 9. Estado
 
@@ -270,8 +270,9 @@ nº 13, para la Fase 2 o para cuando se evalúe `alternate_totals`).
 | R3 | Cumplido, con matiz | Se grabó una fixture real de LaLiga y Premier; la estructura coincide con la sintética (añade el mercado `h2h_lay` de `betfair_ex_eu`). **Vive solo en local y fuera de git** (`tests/fixtures/the_odds_api/real/`, `.gitignore`, BACKLOG nº 18): los términos del proveedor no permiten redistribuirla. `tests/integration/test_the_odds_api_formato.py` corre con la sintética y con la real si existe. En CI solo corre con la sintética |
 | R4 | Cumplido | [verificación §13](../fase-0/verificacion-proveedores.md): las 7 claves existen y están activas; casas por liga; líneas de totales; frescura de `pinnacle` y `betfair_ex_eu` (0–43 s en una captura) |
 
-**Cierre (2026-10-29).** Créditos de la sesión: 28 de 500 (14 del primer R1, 14 del R1 repetido
-junto a R2; el primer R2 no llegó dentro del TTL de 60 s y se repitió encadenado). Quedan 472.
+**Cierre (2026-10-29).** Créditos de la sesión: 28 de 500 (14 del primer R1 y 14 del R1 repetido
+junto a R2). R1 se lanzó primero solo y se paró para revisar sus hallazgos; al retomarlo, el TTL de
+60 s ya había caducado, así que se repitió R1 encadenado con R2 en el mismo comando. Quedan 472.
 Hallazgos que no cambian el código y quedan en el [BACKLOG](../BACKLOG.md): totales (nº 13),
 antigüedad «hace -1 s» (nº 14), rango de `uv-build` (nº 15), tabla de 80 columnas (nº 16) y fallo
 del `.pth` en macOS (nº 17).

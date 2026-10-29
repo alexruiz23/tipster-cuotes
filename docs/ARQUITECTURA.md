@@ -71,7 +71,7 @@ tipster-cuotes/
 ├── tests/
 │   ├── unit/                   fórmulas y reglas, con casos calculados a mano
 │   ├── integration/            proveedor con fixtures, repositorios con SQLite temporal, CLI
-│   └── fixtures/               respuestas reales grabadas y saneadas (sin claves)
+│   └── fixtures/               fixtures sintéticas (en git) y una real saneada (R3) solo en local, en .gitignore
 └── data/                       (ignorado por git) BD SQLite, caché HTTP, CSV descargados
 ```
 

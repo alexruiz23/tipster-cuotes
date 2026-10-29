@@ -39,6 +39,9 @@ commit de la Fase 1** y desde ese momento la puerta se aplica completa.
 Sin red ni clave puedo construir y probar toda la F1 con fixtures, pero no cerrarla: tres
 criterios de aceptación exigen llamadas reales (ver §4.5).
 
+*(Superado: la Fase 1 se cerró el 2026-10-29 con red y clave en la máquina local del usuario.
+Los bloqueos de esta tabla siguen vigentes solo para `www.football-data.co.uk` y los opcionales.)*
+
 ## 3. Decisiones (confirmadas el 2026-10-21)
 
 | # | Decisión | Estado | Qué se hace |
@@ -46,7 +49,7 @@ criterios de aceptación exigen llamadas reales (ver §4.5).
 | D1 | Feeds no españoles | CONFIRMADA (a) | Se muestran siempre etiquetados «FEED NO-ES · VERIFICA LA CUOTA EN LA WEB .ES»; Fase 1b con OddsPapi en cuanto se verifique |
 | D2 | Referencia para el devig y el CLV | CONFIRMADA (c) | Pinnacle si está fresca; si no, Betfair Exchange. Cada pick indica la referencia usada |
 | D3 | Plan de The Odds API | CONFIRMADA | Gratuito en F1–F2; se vuelve a decidir en la F3 |
-| D4 | Dónde se hacen las llamadas reales | A, provisional | En este entorno, cuando estén abiertos los dominios y definida `ODDS_API_KEY`. Si al empezar una sesión siguen bloqueados o falta la clave, se trabaja como B: fixtures y sin cerrar la Fase 1 |
+| D4 | Dónde se hacen las llamadas reales | A, provisional. **Cumplida el 2026-10-29 en la máquina local del usuario, no en el entorno gestionado** | En este entorno, cuando estén abiertos los dominios y definida `ODDS_API_KEY`. Si al empezar una sesión siguen bloqueados o falta la clave, se trabaja como B: fixtures y sin cerrar la Fase 1 |
 | D5 | Ambos Marcan | CONFIRMADA (a) | Solo como salida del modelo hasta tener una fuente de cuotas verificada |
 | D6 | Champions | CONFIRMADA (a) | Solo con p_mercado y etiqueta «SIN MODELO» hasta tener histórico verificado |
 | D7 | Persistencia | A | `sqlite3` de la librería estándar + repositorios, sin SQLAlchemy. Se revisa en F2–F3 solo si el acceso a datos se complica |
