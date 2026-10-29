@@ -23,7 +23,7 @@ from tipster.pricing.devig import DevigMethod
 from tipster.providers.base import OddsBatch, OddsProvider, OddsRequest, RequestRecord
 from tipster.services.reference import Reference, select_reference
 from tipster.staking.kelly import kelly_stake
-from tipster.staking.limits import allocate_daily, loss_limit_reached
+from tipster.staking.limits import LIMIT_TOL, allocate_daily, loss_limit_reached
 from tipster.storage.repositories import (
     EventRepository,
     OddsRepository,
@@ -40,7 +40,7 @@ _FATAL = (ProviderAuthError, QuotaExhaustedError)
 ONE_PER_EVENT = "otro pick de este partido tiene más EV"
 ALREADY_OPEN = "ya hay un pick abierto con stake en este partido"
 LOSS_LIMIT = "límite de pérdida diaria alcanzado"
-NO_ROOM = "sin hueco en el tope diario de exposición o por debajo del stake mínimo"
+NO_ROOM = "sin hueco en el tope diario de exposición"
 
 QuoteKey = tuple[str, str, str, str]  # evento, casa, mercado, selección
 
@@ -291,6 +291,20 @@ class ScanService:
             reasons=tuple(reasons),
         )
 
+    def _blocked(
+        self, o: Opportunity, *, loss_hit: bool, open_events: dict[str, float]
+    ) -> str | None:
+        """Motivo por el que un VALUE no puede llevar stake, o None."""
+        max_odds = self._settings.max_odds
+        if o.quote.price > max_odds:
+            return (
+                f"cuota {o.quote.price:g} por encima de max_odds {max_odds:g} "
+                "(sesgo favorito-longshot)"
+            )
+        if loss_hit:
+            return LOSS_LIMIT
+        return ALREADY_OPEN if o.event.id in open_events else None
+
     def _assign_stakes(self, result: ScanResult, now: datetime) -> None:
         """Kelly de 1/4 con topes a los VALUE (ADR 012): un pick por evento, exposición diaria que
         cuenta los picks abiertos y límite de pérdida diaria. Los demás VALUE quedan en 0."""
@@ -306,6 +320,8 @@ class ScanService:
         open_events = self._tracking.stake_by_open_event()
         best: dict[str, Pick] = {}
         for pick in values:
+            if pick.opportunity.quote.price > s.max_odds:
+                continue  # una cuota demasiado larga no compite por el stake del partido
             current = best.get(pick.opportunity.event.id)
             if current is None or pick.opportunity.ev > current.opportunity.ev:
                 best[pick.opportunity.event.id] = pick
@@ -313,16 +329,22 @@ class ScanService:
         by_day: dict[date, list[tuple[str, float, float]]] = defaultdict(list)
         for pick in values:
             o = pick.opportunity
-            if loss_hit:
-                decided[pick.quote_id] = (0.0, LOSS_LIMIT)
-            elif o.event.id in open_events:
-                decided[pick.quote_id] = (0.0, ALREADY_OPEN)
+            blocked = self._blocked(o, loss_hit=loss_hit, open_events=open_events)
+            if blocked is not None:
+                decided[pick.quote_id] = (0.0, blocked)
             elif best[o.event.id] is not pick:
                 decided[pick.quote_id] = (0.0, ONE_PER_EVENT)
             else:
                 raw = kelly_stake(
                     bank, o.p_final, o.quote.price, fraction=s.kelly_fraction, cap=s.max_stake
                 )
+                if raw < s.min_stake * bank - LIMIT_TOL:
+                    decided[pick.quote_id] = (
+                        0.0,
+                        f"{s.kelly_fraction:g} de Kelly = {raw:.2f} "
+                        f"({raw / bank:.2%} del bankroll), por debajo del mínimo {s.min_stake:.2%}",
+                    )
+                    continue
                 day = o.event.kickoff.astimezone(tz).date()
                 by_day[day].append((str(pick.quote_id), raw, o.ev))
         for day, candidates in by_day.items():

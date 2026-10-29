@@ -1,8 +1,9 @@
 """Captura del cierre de Pinnacle de los picks abiertos y cálculo del CLV (ADR 012).
 
 Nunca se inventa una cuota: sin cuota de Pinnacle no hay cierre, y un cierre dudoso se guarda como
-no fiable y no entra en el CLV. Que Pinnacle actualice su cuota en la última media hora es NO
-VERIFICADO; el `last_update` de cada captura queda registrado para comprobarlo con datos reales.
+no fiable y no entra en el CLV. Un cierre es fiable si se capturó dentro de la ventana previa al
+inicio; el `last_update` se guarda pero no decide (es una marca de la captura, ADR 012). Si el
+precio de Pinnacle no se mueve en la ventana, esa es su cuota de cierre.
 """
 
 from collections import defaultdict
@@ -106,13 +107,10 @@ class CloseService:
         index = selections.index(pick.selection)
         quote = prices[pick.selection]
         fair = closing_fair_odds(raw, index, s.devig_method)
-        max_age = timedelta(minutes=s.closing_max_age_minutes)
+        # El `last_update` de The Odds API es una marca de la captura, no del cambio de precio (ADR
+        # 012), así que la fiabilidad solo mira que se capturó en la ventana previa al inicio.
         before_kickoff = pick.kickoff - quote.captured_at
-        fresh = (
-            quote.provider_last_update is not None
-            and quote.captured_at - quote.provider_last_update <= max_age
-        )
-        reliable = timedelta(0) <= before_kickoff <= max_age and fresh
+        reliable = timedelta(0) <= before_kickoff <= timedelta(minutes=s.closing_window_minutes)
         self._tracking.set_closing(
             pick.id,
             closing_odds=raw[index],

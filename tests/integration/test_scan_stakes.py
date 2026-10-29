@@ -18,7 +18,7 @@ from tipster.config import Settings
 from tipster.pricing.classify import Label
 from tipster.providers.the_odds_api.client import TheOddsApiProvider
 from tipster.providers.the_odds_api.offline import OfflineFetcher
-from tipster.services.scan import ScanResult
+from tipster.services.scan import NO_ROOM, ScanResult
 from tipster.staking.kelly import kelly_stake
 from tipster.storage.db import MEMORY, connect
 from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
@@ -127,3 +127,39 @@ def test_los_picks_guardan_la_version_de_la_mezcla_y_w_1_sin_modelo(
             for p in result.picks} == {("7", 1.0, None)}  # fmt: skip
     rows = conn.execute("SELECT DISTINCT model_version, w_market, model_name FROM picks").fetchall()
     assert [tuple(r) for r in rows] == [("7", 1.0, None)]
+
+
+def test_una_cuota_por_encima_de_max_odds_no_lleva_stake_ni_compite_en_su_partido(
+    conn: sqlite3.Connection,
+) -> None:
+    result = _scan(conn, _settings(max_odds=2.1))  # 2,20 y 2,15 quedan fuera; 2,05 se queda
+    values = {(o.quote.price, o.stake) for o in _value(result)}
+    assert {price for price, stake in values if stake} == {2.05}  # el siguiente del partido 1
+    for o in _value(result):
+        if o.quote.price > 2.1:
+            assert o.stake == 0.0
+            assert o.reasons[-1] == (
+                f"cuota {o.quote.price:g} por encima de max_odds 2.1 (sesgo favorito-longshot)"
+            )
+
+
+def test_max_odds_vale_10_por_defecto() -> None:
+    assert Settings(_env_file=None).max_odds == 10.0
+
+
+def test_el_motivo_dice_que_el_kelly_no_llega_al_minimo(conn: sqlite3.Connection) -> None:
+    result = _scan(conn, _settings(min_stake=0.5))  # mínimo de 500: ningún Kelly llega
+    reasons = {o.reasons[-1] for o in _value(result) if o.stake == 0.0} - {EXTRA_ONE_PER_EVENT}
+    assert reasons and all(
+        "de Kelly = " in r and "por debajo del mínimo 50.00%" in r for r in reasons
+    )
+    assert not any(NO_ROOM in r for r in reasons)
+    assert any("1.29% del bankroll" in r for r in reasons)  # 12,93 / 1 000
+
+
+def test_el_motivo_dice_que_no_hay_hueco_diario_cuando_el_kelly_si_llega(
+    conn: sqlite3.Connection,
+) -> None:
+    result = _scan(conn, _settings(daily_exposure=0.002))  # hueco de 2,00 < mínimo de 2,50
+    best = [o for o in _value(result) if o.reasons[-1] != EXTRA_ONE_PER_EVENT]
+    assert best and all(o.stake == 0.0 and o.reasons[-1] == NO_ROOM for o in best)

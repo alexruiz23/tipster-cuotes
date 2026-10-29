@@ -152,23 +152,36 @@ def test_close_salta_picks_sin_stake_o_con_cierre_ya_capturado(conn: sqlite3.Con
     )
 
 
-def test_un_cierre_con_last_update_antiguo_se_guarda_como_no_fiable_y_sin_clv(
+def test_el_last_update_no_decide_la_fiabilidad_si_se_captura_en_la_ventana(
     conn: sqlite3.Connection,
 ) -> None:
     pick_id = _open(conn, "e1", minutes_to_kickoff=10)
-    stale = _pinnacle("e1", (1.80, 3.60, 3.60), last_update=NOW - timedelta(minutes=45))
-    result = _close(conn, FakeOdds(stale))
+    old = _pinnacle("e1", (1.80, 3.60, 3.60), last_update=NOW - timedelta(minutes=45))
+    result = _close(conn, FakeOdds(old))
+    assert result.captured == [pick_id] and not result.unreliable
+    row = conn.execute(
+        "SELECT closing_reliable, closing_odds, clv IS NOT NULL FROM picks"
+    ).fetchone()
+    assert tuple(row) == (1, 1.80, 1)  # se guarda el last_update, pero no cambia nada
+
+
+def test_una_captura_fuera_de_la_ventana_previa_al_inicio_no_es_fiable(
+    conn: sqlite3.Connection,
+) -> None:
+    pick_id = _open(conn, "e1", minutes_to_kickoff=10)
+    early = _pinnacle("e1", (1.80, 3.60, 3.60), captured=NOW - timedelta(minutes=10))  # KO − 20
+    result = _close(conn, FakeOdds(early))
     assert result.unreliable == [pick_id]
     row = conn.execute("SELECT closing_reliable, clv, closing_odds FROM picks").fetchone()
     assert tuple(row) == (0, None, 1.80)  # la cuota queda registrada, el CLV no se calcula
     assert SqliteTrackingRepository(conn).clv_values() == []
 
 
-def test_una_captura_demasiado_lejos_del_inicio_no_es_fiable(conn: sqlite3.Connection) -> None:
-    _open(conn, "e1", minutes_to_kickoff=45)
-    result = _close(conn, FakeOdds(_pinnacle("e1", (1.80, 3.60, 3.60))), closing_window_minutes=60)
-    assert len(result.unreliable) == 1
-    assert conn.execute("SELECT closing_reliable FROM picks").fetchone()[0] == 0
+def test_una_captura_posterior_al_inicio_no_es_fiable(conn: sqlite3.Connection) -> None:
+    pick_id = _open(conn, "e1", minutes_to_kickoff=10)
+    late = _pinnacle("e1", (1.80, 3.60, 3.60), captured=NOW + timedelta(minutes=11))  # KO + 1
+    result = _close(conn, FakeOdds(late))
+    assert result.unreliable == [pick_id]
 
 
 def test_sin_cuota_de_pinnacle_no_se_inventa_nada(conn: sqlite3.Connection) -> None:

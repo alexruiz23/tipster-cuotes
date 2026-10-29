@@ -69,9 +69,10 @@ class Settings(BaseSettings):
     max_stake: float = Field(default=0.02, gt=0, le=1)  # por apuesta, fracción del bankroll
     daily_exposure: float = Field(default=0.10, gt=0, le=1)
     daily_loss_limit: float = Field(default=0.05, gt=0, le=1)  # provisional
+    # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado
+    max_odds: float = Field(default=10.0, gt=1)
     min_stake: float = Field(default=0.0025, ge=0, lt=1)
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio
-    closing_max_age_minutes: PositiveInt = 30  # una captura más lejana del inicio no es fiable
 
     @field_validator("competitions", "markets", "bookmakers", "reference_order", mode="before")
     @classmethod

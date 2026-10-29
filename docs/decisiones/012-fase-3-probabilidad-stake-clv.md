@@ -150,7 +150,8 @@ columnas de la sección 3.
 - **Captura del cierre** (pendiente del PLAN §7). `tipster close`, ejecutado por `cron`/`launchd` cada vez que
   un pick abierto está a ≤ 15 minutos del inicio: una petición por competición con `bookmakers=pinnacle` y
   solo `h2h`, que cuesta **1 crédito** (mercados × grupos de 10 casas, nivel A). Se guarda la hora de
-  captura; si es de más de 30 minutos antes del inicio, el cierre se marca «no fiable» y no entra en el CLV.
+  captura; si no cae en la ventana previa al inicio, el cierre se marca «no fiable» y no entra en el CLV
+  (regla cambiada el 29/10, ver «Correcciones tras el primer escaneo real»).
   **Estimación (sin verificar):** unas 3–4 jornadas útiles por semana y 2–3 competiciones por jornada son
   unos 6–12 créditos a la semana, unos 25–50 al mes; con 14 créditos por escaneo completo y unos 8 escaneos
   al mes (≈ 110), el total entra en los 500 gratuitos. **NO VERIFICADO:** que Pinnacle actualice su cuota en
@@ -252,8 +253,7 @@ mercado gana en las dos temporadas y en las 6 ligas. La diferencia media es de +
   cierre el modelo podría pesar más; no hay datos para comprobarlo hasta tener capturas en vivo.
 - El cierre capturado por `tipster close` y el servicio de resultados de `tipster settle` están probados con
   proveedores simulados. **NO VERIFICADOS con una llamada real:** la estructura de `/scores`, su coste y que
-  Pinnacle actualice su cuota en la última media hora (el cierre con `last_update` de más de 30 minutos se
-  guarda como no fiable y no entra en el CLV).
+  Pinnacle actualice su cuota en la última media hora (ver «Correcciones tras el primer escaneo real»).
 
 ## Calibración del cierre de Pinnacle en 2024/25 (2026-10-29; `scripts/calibracion_pinnacle.py`)
 
@@ -291,3 +291,32 @@ queda gastada como test ciego del mercado.
   pero tampoco lo descarta: lo que se observa es pérdida de cobertura en esta fuente (API-Football), no
   una cuota peor. La referencia en vivo (The Odds API) es otra fuente y su frescura sigue **NO VERIFICADA**
   (ver `close`). Se mantiene la regla: la comparación modelo-mercado no usa nada posterior al 23/07/2025.
+
+## Correcciones tras el primer escaneo real (2026-10-29)
+
+El primer `tipster scan` en vivo (15 VALUE, 0 POSIBLE ERROR, 14 créditos) y una sonda de solo lectura a
+Pinnacle llevaron a tres cambios.
+
+1. **Sesgo favorito-longshot: `max_odds = 10,0` (por defecto).** Un pick con cuota por encima de `max_odds`
+   **no recibe stake** (se sigue mostrando, con el motivo escrito) y no compite con los demás picks de su
+   partido. Razón: las cuotas largas (en el escaneo, 16,75 y 17,50 con EV +12,8 % y +8,4 %) son donde el EV
+   está más sobrestimado. **Limitación documentada:** el mercado reparte mal la probabilidad entre favoritos
+   y cuotas largas (las largas están sobrevaloradas) y el devig multiplicativo reparte el margen en
+   proporción, sin corregirlo, así que la cuota justa de una cuota larga sale demasiado baja y su EV
+   demasiado alto. Se mantiene el **devig multiplicativo** porque en validación empató con Shin (0,98719
+   frente a 0,98716) y con power y aditivo; esa prueba usa log-loss de todos los resultados, que apenas
+   pesa los extremos, así que no descarta el sesgo en la cola. `max_odds = 10` es un valor elegido por
+   prudencia, **no ajustado con datos**.
+2. **Motivo del stake 0.** Cuando 1/4 de Kelly queda por debajo del mínimo (0,25 % del bankroll), el
+   motivo lo dice con las cifras («0.25 de Kelly = 2.00 (0.20 % del bankroll), por debajo del mínimo
+   0.25 %»). «Sin hueco en el tope diario de exposición» queda solo para cuando el Kelly sí llega al
+   mínimo pero no cabe en el día.
+3. **Regla de fiabilidad del cierre.** El `last_update` de The Odds API **no mide la frescura**: en el
+   escaneo valía entre 0 y 80 s antes de la captura para todas las casas, en partidos a 2 horas y a 4 días
+   del inicio por igual (también en las capturas de la mañana). Es una marca de la instantánea. La regla
+   anterior («`last_update` de menos de 30 minutos») casi siempre se cumplía y daba una falsa seguridad.
+   **Nueva regla:** un cierre es fiable si se captura entre 0 y `closing_window_minutes` (15) antes del
+   inicio, sea cual sea el `last_update`, que se sigue guardando. Si Pinnacle no mueve su cuota en esa
+   ventana, esa cuota es su cierre. `closing_max_age_minutes` desaparece. El riesgo que asume la regla es que
+   el precio de Pinnacle se mueva entre la captura y el inicio; la sonda de abajo mide cuánto.
+
