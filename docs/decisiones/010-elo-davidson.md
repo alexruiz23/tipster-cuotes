@@ -32,8 +32,10 @@ R_h ← R_h + K·(S − E)             R_a ← R_a − K·(S − E)        (suma
   resultado 1X2, que es lo que lo distingue de Dixon-Coles (que usa los goles) y lo hace útil como
   segundo modelo.
 - **Regresión entre temporadas:** al empezar cada temporada, `R ← R̄ + c·(R − R̄)`, con `R̄` la
-  media de los equipos que jugaron la temporada anterior y `c ∈ [0, 1]` («carry», a estimar). Un
-  equipo que reaparece tras `k` temporadas fuera recibe `c^k`. Es la contrapartida del decaimiento
+  media de los equipos que jugaron la temporada anterior y `c ∈ [0, 1]` («carry», a estimar). La
+  regresión se aplica en cada cambio de temporada a todos los equipos con rating (si ninguno jugó la
+  temporada que acaba, hacia la media de todos), así que un equipo que reaparece tras `k` temporadas
+  fuera acumula `c^k`. Es la contrapartida del decaimiento
   temporal de Dixon-Coles: las plantillas cambian.
 - **Temporada:** el 1 de agosto es el corte (misma regla que usa el ADR 007; los 10 partidos de
   agosto de 2020 de la Serie A pertenecen a 2019/20 y reciben la regresión antes, un efecto
@@ -144,7 +146,7 @@ que lo esperable es que **no gane** a Dixon-Coles en log-loss. Su valor es ser u
 distinto, barato y estable, con el que comparar y, quizá, combinar. Si queda claramente peor, se dirá
 tal cual.
 
-## Decisiones que necesito de ti
+## Decisiones tomadas por el usuario
 1. ¿Vale Davidson (opción b) con el `E` de la actualización tomado del mismo modelo?
 2. ¿Vale K constante, sin multiplicador por goles?
 3. ¿Vale estimar `K`, `H`, `ν`, `c` y `δ` por verosimilitud prequential con calentamiento de dos
