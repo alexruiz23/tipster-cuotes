@@ -3,9 +3,9 @@
 **Fecha:** 2026-10-21 · **Estado:** completada con limitaciones (lee la §0 antes que nada).
 
 **Actualización 2026-10-29:** la §13 recoge la verificación de nivel A de The Odds API (criterio
-R4 de la Fase 1), hecha con llamadas reales, y la §14 la de football-data.co.uk (Fase 2). Las
-§0–§12 se dejan como se escribieron; donde la §13 o la §14 las contradicen o las completan, mandan
-ellas.
+R4 de la Fase 1), hecha con llamadas reales, la §14 la de football-data.co.uk y la §15 la del
+dataset de Hugging Face (Fase 2). Las §0–§12 se dejan como se escribieron; donde las §13 a §15 las
+contradicen o las completan, mandan ellas.
 
 ## 0. Limitaciones de esta verificación
 
@@ -550,3 +550,110 @@ Betfair Exchange 1X2 local de cierre). `--` = la columna no existe en el fichero
 - El contenido de las temporadas no muestreadas (solo se comprobó que existen).
 - La actualización durante la temporada: cuándo se publica cada jornada y cuándo se rellenan las
   cuotas de cierre.
+
+## 15. Verificación de nivel A del dataset `eatpizzanot/soccer-dataset` (Fase 2, 2026-10-29)
+
+**Cómo se obtuvo.** Descarga directa desde Hugging Face el 2026-10-29: la API del dataset, su
+`README.md`, `data_dictionary.md` y `QUALITY_REPORT.md`, y cinco Parquet (`fixtures`, `odds`,
+`leagues`, `teams`, `league_catalogue`; ≈16 MB, en el scratchpad y fuera de git). Se leyeron con
+`pyarrow` y `pandas` en un entorno temporal de `uv`, sin tocar las dependencias del proyecto. No se
+ha escrito ningún cargador.
+
+### 15.1 Ficha
+
+| Dato | Observado |
+|---|---|
+| Identificador | `eatpizzanot/soccer-dataset`, público, sin acceso restringido (`gated: false`) |
+| Revisión | `sha f0cbe86bee3f28cc4b803f735a5287968741c471`, `lastModified 2026-07-05T01:23:18Z` |
+| Licencia | `license: cc-by-4.0` (ficha y etiqueta de la API). La ficha: «Licensed CC-BY-4.0; cite API-Football and football-data.co.uk» |
+| Fuentes declaradas | «Sources: API-Football + football-data.co.uk» |
+| Tamaños | `odds` 2 591 808 B · `fixtures` 12 938 933 B · `teams` 321 028 B · `league_catalogue` 39 623 B · `leagues` 8 240 B |
+| Calidad declarada | «Gate: PASS — 54/54 checks passed» (`QUALITY_REPORT.md`, 2026-07-05) |
+| Columnas | Las de los cinco Parquet **coinciden** con `data_dictionary.md`: `fixtures` (21), `odds` (9), `leagues` (7), `teams` (8) y `league_catalogue` (15) |
+
+### 15.2 Ligas disponibles
+
+Las 6 ligas y la Champions están en `leagues`:
+
+| Competición | `leagues.id` | `fd_code` |
+|---|---|---|
+| Premier League | 1 | E0 |
+| La Liga | 5 | SP1 |
+| Segunda División | 6 | SP2 |
+| Serie A | 7 | I1 |
+| Ligue 1 | 9 | F1 |
+| Bundesliga | 11 | D1 |
+| UEFA Champions League | 89 | CUP-UCL |
+
+La Champions **sí está**, lo que contradice el BACKLOG nº 2 (que lo decía de football-data.co.uk).
+Resultados jugados de las 6 ligas desde el 2010-08-07.
+
+### 15.3 Tabla `odds`
+
+- **Solo 1X2:** `home_win`, `draw`, `away_win`, más `bookmaker`, `source` y `known_at`. **No hay
+  O/U 2.5, ni Asian handicap, ni BTTS.** Una fila por casa y partido (hasta 3 por partido).
+- **Casas en las 7 competiciones** (filas): Pinnacle 23 536 · Bet365 9 104 · Betfair 139 ·
+  888sport 18 · Unibet 13 · 1xBet 12 · William Hill 1. En todo el dataset hay 86 filas de
+  «Betfair Exchange» y 263 de «Maximum». No hay medias de mercado.
+- **«96 %+ Pinnacle» (diccionario):** en filas, Pinnacle es el 84,8 % de todo el dataset y el 71,7 %
+  de las 7 competiciones. En partidos jugados de las 6 ligas entre 2016/17 y 2024/25, el 96,3 %
+  tiene Pinnacle (21 035 de 21 843).
+- **Procedencia:** las cuotas de Pinnacle de esas 6 ligas son `API-Football-closing` (21 033
+  filas) y 6 de `The-Odds-API`. Las 8 849 de Bet365 son `source = CSV` (football-data.co.uk).
+- **`known_at`:** para las 32 823 filas de las 7 competiciones, `known_at − date_utc = 0` exacto.
+  Es la hora del partido, **no una captura medida de la cuota**. Que sean cuotas de cierre es lo que
+  declara el dataset, **NO VERIFICADO**.
+- **Rango:** mínimo 1.01, máximo 201 en una selección; 364 filas fuera de la banda de overround
+  [1.0, 1.25] (aviso del propio informe de calidad).
+
+### 15.4 Partidos jugados y con cuota de Pinnacle (crudo, sin quitar duplicados)
+
+Temporada con corte el 1 de agosto. «Jugados / con Pinnacle»:
+
+| Temp. | Premier | LaLiga | Segunda | Serie A | Ligue 1 | Bundesliga |
+|---|---|---|---|---|---|---|
+| 2016/17 | 380 / 380 | 454 / 380 | 550 / 459 | 418 / 418 | 380 / 380 | 340 / 306 |
+| 2017/18 | 380 / 380 | 454 / 380 | 625 / 461 | 418 / 418 | 380 / 380 | 306 / 306 |
+| 2018/19 | 380 / 380 | 418 / 380 | 586 / 441 | 418 / 418 | 380 / 380 | 308 / 305 |
+| 2019/20 | 380 / 380 | 418 / 391 | 542 / 461 | 407 / 407 | 279 / 279 | 308 / 306 |
+| 2020/21 | 380 / 380 | 418 / 418 | 518 / 464 | 429 / 429 | 382 / 380 | 342 / 340 |
+| 2021/22 | 380 / 380 | 418 / 418 | 510 / 507 | 418 / 418 | 382 / 380 | 342 / 340 |
+| 2022/23 | 380 / 380 | 418 / 418 | 468 / 468 | 419 / 419 | 380 / 380 | 308 / 306 |
+| 2023/24 | 380 / 380 | 418 / 418 | 468 / 465 | 418 / 418 | 308 / 308 | 308 / 308 |
+| **2024/25** | **380 / 380** | **418 / 418** | **510 / 505** | **418 / 418** | **308 / 308** | **308 / 308** |
+| 2025/26 | 380 / 272 | 409 / 281 | 556 / 327 | 410 / 331 | 310 / 253 | 308 / 245 |
+
+- **Antes de 2016/17 no hay ninguna cuota:** 0 de 1 826 partidos por temporada en 2010/11 a
+  2015/16, y la primera fecha con cuotas es el 2016-08-12.
+- **2024/25 está completo para Pinnacle en 5 de las 6 ligas** (Premier, LaLiga, Serie A, Ligue 1 y
+  Bundesliga); Segunda tiene 505 de 510 partidos (99,0 %).
+- **Las cifras por encima de lo esperado no son partidos reales.** Una liga de 20 equipos tiene 380
+  partidos y la Serie A y LaLiga salen con 418:
+  - **Duplicados de entidad confirmados:** en LaLiga 2024/25 el club aparece como «Ath Bilbao»
+    (`teams.id` 107) y «Athletic Club» (4643); el partido del 2024-08-15 está dos veces, una a las
+    00:00 y otra a las 17:00, con el mismo resultado. El equipo 4643 y el 107 suman 38 partidos
+    cada uno, y los otros 19 equipos, 40. Eso son 38 partidos duplicados (418 − 380).
+  - Serie A (418) y LaLiga tienen el mismo exceso de 38 (hipótesis de la misma causa, **no
+    comprobada** en la Serie A).
+  - Segunda (510 frente a 462) y Bundesliga/Ligue 1 (+2) se explican en parte por promociones
+    (no comprobado).
+  - La Premier no tiene exceso en ninguna temporada.
+- **2025/26:** los partidos con Pinnacle bajan mes a mes (seis ligas juntas, con Pinnacle /
+  jugados): 169/170 en agosto, 217/219 en septiembre, 227/228 en octubre, 232/265 en noviembre,
+  217/217 en diciembre, 217/295 en enero, 162/257 en febrero, 203/235 en marzo, 64/233 en abril,
+  1/248 en mayo y 0/6 en junio de 2026. Todas son `API-Football-closing`. Su fiabilidad después del
+  23/07/2025 es **NO VERIFICADO**.
+- **Champions:** con Pinnacle desde 2020/21 (118/250, 106/214, 117/202, 123/225, 167/281 en
+  2020/21 a 2024/25) y ninguno antes.
+- **Horas:** 1 425 partidos de las 6 ligas en 2016/17–2024/25 tienen hora 00:00:00 (solo se conocía
+  la fecha).
+
+### 15.5 Qué sigue NO VERIFICADO
+
+- Que el dataset pueda usarse para entrenar modelos sin conflicto con los términos de
+  football-data.co.uk y de API-Football (la ficha solo dice CC-BY-4.0). Ver BACKLOG nº 19 y 23.
+- Que el cierre de Pinnacle de API-Football coincida con el de football-data.co.uk (no se ha
+  cruzado partido a partido) ni con el cierre real.
+- La fiabilidad de las cuotas de Pinnacle de 2025/26.
+- La causa de los excesos de partidos en Serie A, Segunda, Bundesliga y Ligue 1.
+- Que el dataset no cambie: la revisión fijada es la de 2026-07-05.

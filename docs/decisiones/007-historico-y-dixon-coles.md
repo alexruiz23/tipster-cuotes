@@ -1,106 +1,137 @@
-# 007 — Histórico, ruptura de Pinnacle, Dixon-Coles, Elo y validación walk-forward
+# 007 — Histórico (dataset de Hugging Face), referencia de mercado, Dixon-Coles, Elo y validación walk-forward
 
 **Estado:** Propuesta (2026-10-29) · **Fecha:** 2026-10-29
 
-Pendiente de dos cosas antes de pasar a *Aceptada*: tu OK a este diseño y la respuesta del autor de
-football-data.co.uk sobre sus términos de uso (BACKLOG nº 19). **No se escribe código de la Fase 2
-hasta entonces.** Los datos que se citan salen de la
-[verificación §14](../fase-0/verificacion-proveedores.md#14-verificación-de-nivel-a-de-football-datacouk-fase-2-2026-10-29).
+Pendiente de tu OK a este diseño y de validar los datos (informe de la
+[verificación §15](../fase-0/verificacion-proveedores.md#15-verificación-de-nivel-a-del-dataset-eatpizzanotsoccer-dataset-fase-2-2026-10-29)).
+**No se escribe código de la Fase 2 hasta entonces.**
+
+**Historial de este ADR.** La primera versión descargaba los CSV de football-data.co.uk. Se
+descartó el 2026-10-29 porque sus términos limitan el uso a «private individuals only, NOT
+commerical or data training products using automated bots/scrapers/AI» (verificación §14.4). Esta
+versión toma la fuente histórica de un dataset de Hugging Face. No hay descargador de CSV.
 
 ## Contexto
 
 La Fase 2 (PLAN §6) construye el histórico, **dos modelos, Dixon-Coles y Elo (este como segundo
-modelo)**, y una evaluación sin fuga de datos que compara ambos con la probabilidad del mercado. Lo verificado condiciona el diseño:
+modelo)**, y una evaluación sin fuga de datos que compara ambos con la probabilidad del mercado.
+Lo observado en el dataset (verificación §15) condiciona el diseño:
 
-- Las 6 ligas están en `mmz4281/<temporada>/<E0|SP1|SP2|I1|D1|F1>.csv`, de 1993/94 a 2026/27. No hay
-  Champions ni cuotas de Ambos Marcan.
-- El cierre de Pinnacle (`PSCH/D/A`) está completo de 2012/13 a 2024/25, a medias en 2025/26 (última
-  fecha el 14/01/2026) y ausente en 2026/27. Betfair Exchange (`BFECH/D/A`) existe solo desde
-  2024/25. `Max*`/`Avg*` de cierre existen desde 2019/20 y excluyen a Pinnacle desde el 23/07/2025.
-- Las fechas vienen en `dd/mm/yy` o `dd/mm/yyyy` según la temporada, hay BOM en unas y no en otras,
-  y la zona horaria de la columna `Time` no está verificada.
-- Los términos del sitio limitan el uso a «private individuals only, NOT commerical or data
-  training products using automated bots/scrapers/AI». Hasta aclararlo, nada de lo de abajo se
-  implementa.
+- Tiene resultados de las 6 ligas desde 2010/11 y la Champions, pero **cuotas solo desde 2016/17**
+  (0 filas en 2010/11 a 2015/16) y en la Champions desde 2020/21, con cobertura parcial.
+- La tabla `odds` es **solo 1X2**: una fila por casa y partido, sin O/U 2.5, sin Betfair Exchange
+  relevante (86 filas en todo el dataset) y sin `Max`/`Avg`.
+- El cierre de Pinnacle procede de **API-Football** (`source = API-Football-closing`), no de
+  football-data.co.uk. Cubre el 96,3 % de los partidos jugados de las 6 ligas entre 2016/17 y
+  2024/25 (21 035 de 21 843, contando duplicados).
+- `known_at` de las cuotas es **igual a la hora del partido** en todas las filas observadas: no es
+  la hora real de captura de la cuota.
+- Hay **entidades de equipo duplicadas** (por ejemplo «Ath Bilbao» e «Athletic Club» en LaLiga
+  2024/25), que duplican 38 partidos de esa temporada.
 
-## 1. Almacenamiento en SQLite (migración `0002_historico.sql`)
+## 1. Fuente histórica y licencia
 
 ### Opciones
-1. Una tabla ancha con una columna por cuota del CSV (`psch`, `psd`, …).
-2. Resultados en una tabla y cuotas en formato largo, como `odds_quotes`.
-3. Seguir guardando solo los CSV crudos y leerlos al vuelo.
+1. CSV de football-data.co.uk (descartada: términos de uso, ver arriba).
+2. Dataset de Hugging Face `eatpizzanot/soccer-dataset`.
+3. Histórico de pago de The Odds API u otra API (no evaluadas).
 
-### Decisión: la 2
+### Decisión: la 2 (decidida por el usuario el 2026-10-29)
+- **Fuente:** `https://huggingface.co/datasets/eatpizzanot/soccer-dataset`. Tablas usadas:
+  `fixtures`, `odds`, `leagues` y `teams` (≈16 MB en Parquet). El resto (alineaciones, jugadores,
+  `xg_training`…) no se usa.
+- **Licencia:** CC-BY-4.0 según la ficha del dataset y la etiqueta `license:cc-by-4.0` de su API.
+  Exige atribución.
+- **Atribución obligatoria** (la ficha dice «cite API-Football and football-data.co.uk»; se añade el
+  autor del dataset). Va en el README y en cada informe que use estos datos:
+  *«Datos: eatpizzanot/soccer-dataset (CC-BY-4.0), compilado a partir de API-Football y
+  football-data.co.uk.»*
+- **Versión fijada:** la ingesta registra el `sha` de la revisión del dataset (hoy
+  `f0cbe86bee3f28cc4b803f735a5287968741c471`, 2026-07-05) y el `sha256` de cada Parquet, de modo que
+  cada informe dice con qué versión se hizo.
+- **Ingesta:** desde los Parquet (descarga con `huggingface_hub` o `datasets`, o HTTP directo), con
+  caché local en `data/raw/hf_soccer/` (ignorado por git). No hay descarga de CSV ni scraping.
+
+### Riesgo legal que esta decisión NO elimina (NO VERIFICADO)
+- La licencia CC-BY-4.0 es la que pone **quien compila** el dataset. El propio dataset declara que
+  mezcla datos de football-data.co.uk y de API-Football. Una etiqueta CC-BY del compilador no puede
+  conceder derechos que no tiene sobre datos de terceros.
+- En las 7 competiciones, 10 011 de 38 489 partidos jugados llevan `merged_football_data = true`, y
+  las 8 849 cuotas de Bet365 proceden de `source = CSV` (es decir, de football-data.co.uk). Las
+  cuotas de Pinnacle proceden de API-Football, cuyos términos **no se han revisado**.
+- Esto no se puede cerrar con una lectura de la ficha. Queda como pregunta abierta (BACKLOG nº 19) y
+  la respuesta del autor de football-data.co.uk sigue siendo relevante. **Mitigación de diseño:** el
+  modelo no usa las cuotas como entrada y el ingestor filtra por `source`, así que excluir las filas
+  `CSV` es un cambio de una línea si hiciera falta.
+
+## 2. Almacenamiento en SQLite (migración `0002_historico.sql`)
+
+Se mantiene el diseño por tablas y el formato largo para las cuotas.
+
 ```
-history_files    (id, competition_id, season, url, fetched_at, last_modified, sha256, n_rows, raw_path)
-teams            (id, name)                                  -- nombre canónico
-team_aliases     (source, raw_name, team_id)  PK (source, raw_name)
+dataset_files    (id, name, hf_revision, sha256, n_rows, fetched_at, raw_path)
+teams            (id, name)                                   -- nombre canónico del proyecto
+team_aliases     (source, raw_id, raw_name, team_id)          -- PK (source, raw_id)
 historical_matches (
-  id, competition_id, season, match_date,                     -- fecha ISO, sin hora
-  kickoff_time_raw,                                           -- tal como viene; zona NO VERIFICADA
-  home_team_id, away_team_id, fthg, ftag, ftr, hthg, htag,    -- medio tiempo puede ser NULL
-  file_id REFERENCES history_files, source_row,               -- trazabilidad hasta la fila del CSV
+  id, competition_id, season, match_date,                     -- fecha ISO; la unidad de tiempo es el día
+  kickoff_utc,                                                -- NULL si la hora es 00:00 (solo había fecha)
+  home_team_id, away_team_id, fthg, ftag,
+  source_fixture_id,                                          -- fixtures.id del dataset
+  file_id REFERENCES dataset_files,
   UNIQUE (competition_id, season, match_date, home_team_id, away_team_id) )
 historical_odds  (
-  match_id, bookmaker_code, moment, market_id, selection, price,
-  PRIMARY KEY (match_id, bookmaker_code, moment, market_id, selection),
-  CHECK (moment IN ('open','close')), CHECK (price > 1) )
+  match_id, bookmaker, market_id, selection, price, source,   -- source = columna `source` del dataset
+  PRIMARY KEY (match_id, bookmaker, market_id, selection),
+  CHECK (price > 1) )
 ```
-- **Por qué largo:** las columnas aparecen y desaparecen según la temporada (`BFE*` desde 2024/25,
-  `PS*` hasta 2025/26); con filas, una cuota que no existe es una fila que no existe, no un `NULL`
-  que alguien puede confundir con un dato. Reutiliza los `market_id` y `selection` de Fase 1.
-- **Qué se carga:** solo 1X2 y O/U 2.5 de `PS`, `BFE`, `Max` y `Avg`, apertura y cierre. El resto de
-  casas, el hándicap asiático y las estadísticas de partido no se cargan (YAGNI).
-- **`bookmaker_code`** conserva el prefijo del CSV (`PS`, `BFE`, `Max`, `Avg`): no se mezcla con los
-  `bookmaker_id` de `domain/bookmakers.py`, que son feeds de la API en vivo.
-- **Nombres de equipo:** `team_aliases` se rellena con un fichero versionado en el repo (CSV a mano).
-  Si el CSV trae un nombre sin alias, la carga **falla con el nombre y la fila**; no hay
-  emparejamiento difuso silencioso. Ese mismo fichero servirá en la F3 para enlazar con los nombres
-  de The Odds API.
-- **Crudos y caché:** el CSV se guarda tal cual en `data/raw/football_data/` (ignorado por git) y se
-  descarga de nuevo solo si ha caducado el TTL; se registra su `sha256` y `last_modified`, de modo
-  que cada informe puede decir con qué versión de los datos se hizo.
-- **Fixtures de test:** sintéticas e inventadas, nunca CSV reales (por los términos del sitio).
+- **Solo 1X2** (`market_id = '1x2'`; `home_win`, `draw`, `away_win` → `local`, `empate`, `visitante`).
+  Todas las filas de `odds` se consideran cierre porque así las etiqueta el dataset
+  («Odds known at/around kick-off (closing line)»); que lo sean en realidad es NO VERIFICADO.
+- **Duplicados de equipo:** el dataset trae el mismo club con ids distintos. `team_aliases` apunta
+  cada `teams.id` del dataset a un equipo canónico (fichero versionado en el repo, hecho a mano). Al
+  cargar, los partidos se **colapsan por clave canónica** `(liga, día, local, visitante)`; si dos
+  copias discrepan en el resultado, la carga **falla** con ambos ids. Un test usa un ejemplo
+  sintético con dos ids para el mismo club.
+- **Temporada:** `season` se deriva con el 1 de agosto como corte (el 2019/20 terminó en julio de
+  2020). La Champions es una competición aparte con su propio calendario.
+- **Fixtures de test:** sintéticas e inventadas, no filas del dataset.
+- **Carga idempotente** (`INSERT … ON CONFLICT`).
 
 ### Consecuencias
-- La carga es idempotente (`UNIQUE` y `INSERT … ON CONFLICT`); recargar una temporada en curso
-  actualiza resultados y cuotas nuevas sin duplicar.
-- Una consulta «cierre de Pinnacle de un partido» son 3 filas; es más verboso que una columna, pero
-  la ruptura de Pinnacle se ve como ausencia de filas, no como una columna vacía.
+- Hasta 2015/16 hay resultados pero no cuotas: sirven para calentar el modelo, no para compararlo
+  con el mercado.
+- `kickoff_utc` es `NULL` en unos 1 400 partidos de las 6 ligas entre 2016/17 y 2024/25 (hora
+  00:00): por eso la unidad de tiempo del walk-forward sigue siendo el día.
 
-## 2. La ruptura de Pinnacle (25/26 en adelante)
+## 3. Referencia de mercado y la ruptura de Pinnacle
 
-### Opciones
-1. Usar `Avg*`/`Max*` de cierre como referencia desde 2025/26.
-2. Usar Betfair Exchange (`BFEC*`) desde 2025/26.
-3. Limitar la evaluación a ≤ 2024/25 y no evaluar lo posterior.
-4. Capturar el cierre en vivo con The Odds API (ADR 002; es trabajo de la F3).
+### Qué cambia respecto al dataset
+- **Solo hay una referencia: el cierre de Pinnacle en 1X2.** No hay Betfair Exchange, `Avg` ni
+  `Max`, y por tanto **no hay baseline de mercado para O/U 2.5**. La Fase 2 compara con el mercado
+  únicamente el 1X2. El O/U 2.5 de Dixon-Coles se evalúa solo contra los resultados (Brier y
+  log-loss del propio modelo), sin comparación con el mercado.
+- **Tramo con mercado:** 2016/17 a 2024/25 (9 temporadas por liga). Son 4 menos que las 13 que
+  suponía la primera versión de este ADR.
 
 ### Decisión
-- **Evaluación principal (la que decide):** solo con las temporadas en que el cierre de Pinnacle es
-  completo, **2012/13 a 2024/25**. Es lo que ya decía PLAN §6.
-- **Betfair Exchange como referencia secundaria**, no sustituta, y solo tras comprobarlo: en
-  2024/25 hay a la vez `PSC*` y `BFEC*` al 100 % en las 6 ligas. Con esas temporadas se mide cuánto
-  se parecen las probabilidades sin margen de ambos (diferencia de log-loss y de Brier del mismo
-  modelo contra una y otra referencia). **Criterio de aceptación:** si la diferencia es material, la
-  extensión a 2025/26 se marca como no comparable. Qué es «material» se fija **antes** de mirar
-  2025/26, en el informe de esa comprobación.
-- **2025/26 se informa por separado,** con `BFEC*` como referencia y la etiqueta de su fuente en
-  cada fila del informe. `BFECH` baja a ~70 % en abril-mayo de 2026: los partidos sin referencia
-  se excluyen y se cuenta cuántos.
-- **`Avg*` solo como respaldo marcado** (es una media de casas con margen, y desde el 23/07/2025 ya
-  no incluye a Pinnacle: hay ruptura de serie). **`Max*` nunca como probabilidad:** el máximo de
-  varias casas no es un libro coherente y no suma 1 tras quitar el margen.
-- **2026/27 no se usa para decidir** (63 a 121 partidos por liga a 26/10/2026).
-- **Nunca se empalman series en silencio:** cada comparación modelo-mercado usa **una sola
-  referencia** sobre el **mismo conjunto de partidos**.
+- **El corte seguro sigue siendo 2024/25 para la comparación con el mercado.** Ese es el último
+  tramo con Pinnacle completo en esta fuente (96 %+ de los partidos).
+- **Precisión sobre el entrenamiento.** El corte afecta a la **referencia de mercado**, no a los
+  modelos: Dixon-Coles y Elo se entrenan con resultados, y los resultados de 2025/26 son válidos.
+  Los modelos pueden entrenar con todo lo anterior a cada fecha de predicción, 2025/26 incluido; lo
+  que no se hace es comparar con el mercado a partir de 2025/26.
+- **2025/26 y 2026/27:** en el dataset hay cuotas de Pinnacle posteriores al 23/07/2025, pero la
+  cobertura cae (217 de 295 partidos en enero de 2026, 162 de 257 en febrero, 64 de 233 en abril y
+  1 de 248 en mayo) y si son fiables es **NO VERIFICADO**: el aviso del 23/07/2025 es de
+  football-data.co.uk sobre la API pública de Pinnacle y no sabemos qué fuente usa API-Football.
+  Esos partidos se excluyen de la comparación y se cuentan en el informe.
+- **Nunca se empalman series en silencio.** Cada comparación modelo-mercado usa **una sola
+  referencia** sobre el **mismo conjunto de partidos**; los partidos sin cuota se excluyen y se
+  cuentan.
+- **Champions:** hay cuotas de Pinnacle desde 2020/21, pero solo para el 47-59 % de los partidos.
+  Se puede incluir como liga adicional, sin que condicione el diseño.
 
-### Consecuencias
-- El número de temporadas con referencia *sharp* completa es 13 por liga; con Betfair, 2 completas
-  más la actual. Alcanza para evaluar, no para calibrar con Betfair.
-- Si la F3 captura cierres en vivo, esos datos propios resolverán el tramo posterior al corte.
-
-## 3. Dixon-Coles
+## 4. Dixon-Coles
 
 ### Modelo
 Para un partido de local *i* y visitante *j* en una liga:
@@ -124,19 +155,16 @@ P(x, y) = τ(x, y; λ, μ, ρ) · Poisson(x; λ) · Poisson(y; μ)
 | `ξ` decaimiento | hiperparámetro | peso `exp(−ξ·Δt)`, con Δt en días desde el partido hasta la fecha de predicción; se configura como **vida media** (`ln2/ξ`) |
 | penalización L2 sobre `a`, `d` | hiperparámetro | acerca a la media de la liga a los equipos con poco historial (ascendidos); valor 0 incluido en la malla |
 
-- **Una liga, un modelo:** no hay datos de ligas distintas relacionados (sin Champions), así que no
-  se comparten parámetros entre ligas.
+- **Una liga, un modelo:** no se comparten parámetros entre ligas.
 - **Ajuste:** máxima verosimilitud ponderada con `scipy.optimize` (ya es dependencia). Los valores
-  concretos de vida media y penalización **no se fijan aquí**: se eligen por malla en las
-  temporadas de validación (sección 4) y se registran. Cualquier número que aparezca ahora sería
-  una invención.
-- **Matriz de marcadores:** hasta 10-10 goles; se comprueba que la masa fuera de la matriz es
-  despreciable (el test falla si la suma es menor que 1 − 1e-6) y se renormaliza.
+  de vida media y penalización **no se fijan aquí**: se eligen por malla en el tramo de validación y
+  se registran. Cualquier número que aparezca ahora sería una invención.
+- **Matriz de marcadores:** hasta 10-10 goles; el test falla si la masa fuera de la matriz es mayor
+  que 1e-6; se renormaliza.
 - **Mercados:** 1X2 = triángulo inferior, diagonal y superior; O/U 2.5 = P(goles totales ≥ 3);
-  BTTS = 1 − P(local 0) − P(visitante 0) + P(0,0). Sin cuotas de BTTS en el histórico, BTTS no se
-  evalúa en la F2.
+  BTTS = 1 − P(local 0) − P(visitante 0) + P(0,0). BTTS no se evalúa en la F2: no hay cuotas.
 - **Equipos nuevos:** un ascendido sin partidos en la liga entra con ataque y defensa de la media
-  (penalización L2). Es una limitación declarada; no se carga la segunda división para evitarla.
+  (penalización L2). Es una limitación declarada.
 
 ### Elo (segundo modelo, dentro del alcance de la Fase 2)
 
@@ -146,55 +174,63 @@ se usa en conjunto (ensamble o respaldo) no se diseña aquí:** depende de los r
 comparación y se decide después.
 
 - **Qué fija este ADR:** Elo se alimenta solo de resultados anteriores a la fecha de predicción,
-  entra en las mismas reglas de validación (sección 4: mismos tramos, mismos partidos, mismas
+  entra en las mismas reglas de validación (sección 5: mismos tramos, mismos partidos, mismas
   métricas, ninguna cuota como entrada) y se informa junto a Dixon-Coles y el mercado.
 - **Hiperparámetros** (factor K, ventaja de campo y rating inicial de los equipos nuevos): se
-  eligen en el tramo de validación, como los de Dixon-Coles. No se fija ningún valor aquí.
+  eligen en el tramo de validación. No se fija ningún valor aquí.
 - **Qué falta y requiere un ADR propio (008) antes de implementar:** cómo convertir la diferencia
-  de Elo en probabilidades de 1X2. El Elo no da la probabilidad de empate por sí solo, y esa
-  decisión (PLAN §6) se toma por escrito antes de escribir `elo.py`.
+  de Elo en probabilidades de 1X2. El Elo no da la probabilidad de empate por sí solo.
 - **Tests a mano:** actualización de rating tras un resultado concreto (PLAN §6); la suma de las
   probabilidades 1X2 es 1; y un test que falla si Elo usa un resultado de fecha igual o posterior a
   la que predice.
+- **Nota:** `teams.rating_mu` del dataset es un rating Glicko-2 precalculado con un procedimiento
+  que no conocemos. **No se usa**: no se puede garantizar que no contenga información posterior a la
+  fecha de predicción.
 
-### Tests (casos a mano, como en la F1)
+### Tests de Dixon-Coles (casos a mano, como en la F1)
 La matriz suma 1; la corrección τ a mano en 0-0, 1-0, 0-1 y 1-1; los tres mercados a mano desde una
 matriz 3×3; con ρ = 0 la matriz coincide con dos Poisson independientes.
 
-## 4. Validación walk-forward sin fuga de datos
+## 5. Validación walk-forward sin fuga de datos
 
 Reglas, todas con test:
 
 1. **La unidad de tiempo es el día del partido.** Para predecir los partidos de una fecha *D* solo
    se entrena con partidos de fecha **estrictamente anterior** a *D*. Los partidos del mismo día no
-   se usan entre sí (la zona horaria de `Time` no está verificada). Hay un test que **falla** si
-   alguna fecha de entrenamiento no es anterior a todas las de predicción (PLAN §6).
+   se usan entre sí (hay horas ausentes y la zona horaria de `date_utc` es la que declara el
+   dataset). Hay un test que **falla** si alguna fecha de entrenamiento no es anterior a todas las
+   de predicción (PLAN §6).
 2. **Se reajusta por bloques de jornada** (por ejemplo cada 7 días), con ventana expansiva y pesos
    de decaimiento medidos hasta el inicio del bloque. No se reajusta partido a partido.
 3. **Tres tramos separados por fecha,** fijados antes de ver resultados y escritos en el informe:
-   calentamiento (solo entrenar), **validación** (se eligen vida media y penalización) y
-   **prueba** (se informa; no se vuelve a tocar nada tras verla). Qué temporadas van en cada tramo
-   se decide con el usuario cuando se vea la cantidad real de datos limpios.
-4. **Las cuotas nunca entran como variable del modelo.** Ni cierre ni apertura: el cierre es lo que
-   se compara. Meterlas contaminaría la comparación y sería fuga de información.
+   calentamiento (solo entrenar), **validación** (se eligen los hiperparámetros) y **prueba** (se
+   informa; no se vuelve a tocar nada tras verla). Los tramos con mercado solo pueden caer entre
+   2016/17 y 2024/25; qué temporadas van en cada tramo se decide con el usuario con la cantidad
+   real de datos limpios.
+4. **Las cuotas nunca entran como variable del modelo.** El cierre es lo que se compara; meterlo
+   contaminaría la comparación y sería fuga de información. Tampoco se usan `known_at`, `xg` de
+   `match_stats` ni `rating_mu` como entradas.
 5. **La calibración** (isotónica o Platt) se ajusta solo con predicciones de validación anteriores
    al tramo de prueba, y se aplica después.
 6. **Comparación justa:** modelo y mercado se evalúan sobre los **mismos partidos**; los que no
-   tienen referencia o resultado se excluyen y se cuentan en el informe.
-7. **Métricas:** Brier multiclase, log-loss y tabla de fiabilidad para 1X2 (y para O/U 2.5 con la
-   cuota de cierre de Pinnacle de `PC>2.5`/`PC<2.5`, donde exista). Diferencias pareadas modelo-mercado con
-   intervalo por remuestreo por jornada. El informe compara Dixon-Coles, Elo y el mercado
-   sobre los mismos partidos; si el mercado gana, lo dice tal cual.
-8. **Reproducibilidad:** el informe incluye los `sha256` de los CSV, la referencia usada y la
-   semilla; ejecutar dos veces da el mismo resultado.
+   tienen cuota de Pinnacle o resultado se excluyen y se cuentan en el informe.
+7. **Métricas:** Brier multiclase, log-loss y tabla de fiabilidad para el 1X2; para O/U 2.5, solo
+   frente a los resultados. Diferencias pareadas modelo-mercado con intervalo por remuestreo por
+   jornada. El informe compara Dixon-Coles, Elo y el mercado sobre los mismos partidos; si el
+   mercado gana, lo dice tal cual.
+8. **Reproducibilidad:** el informe incluye la revisión de Hugging Face, los `sha256` de los
+   Parquet, la referencia usada y la semilla; ejecutar dos veces da el mismo resultado.
 
 ## Consecuencias globales
 
-- **Bloqueo:** sin respuesta sobre la licencia no se escribe el descargador. Si la respuesta es
-  negativa, las alternativas son cambiar de fuente (por ejemplo, el histórico de pago de The Odds
-  API, o la API por suscripción que menciona el propio sitio; ninguna evaluada aún) o reducir el
-  alcance. Se decidiría en otro ADR.
-- **Qué no cubre:** Champions, BTTS, lesiones/alineaciones, xG ni ligas inferiores.
+- **Riesgo legal abierto** (sección 1): la licencia CC-BY del dataset no resuelve por sí sola los
+  términos de football-data.co.uk ni los de API-Football.
+- **Dependencia de un tercero:** el dataset es un repositorio de una persona; puede cambiar o
+  desaparecer. La caché local con `sha256` evita que un cambio altere un informe ya hecho.
+- **Menos mercado del previsto:** 9 temporadas con referencia, una sola referencia y solo 1X2.
+- **Calidad de datos:** el dataset necesita un paso de deduplicación de equipos antes de usarse; la
+  garantía de calidad que declara («54/54 checks») no lo detecta.
+- **Qué no cubre:** BTTS, lesiones/alineaciones, xG ni ligas inferiores.
 - **Coste de cómputo:** un ajuste por bloque y liga; con unos 20 equipos y miles de partidos es
   manejable, pero no está medido (NO VERIFICADO).
 - **Riesgo conocido:** el mercado probablemente gane a un Dixon-Coles sencillo. El valor de la
