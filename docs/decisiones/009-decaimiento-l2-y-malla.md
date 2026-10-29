@@ -99,3 +99,59 @@ Tres partidos de 2024/25 (no se usaron para elegir nada), local / empate / visit
 La brecha del Arsenal se acorta (victoria local 0,623 → 0,761 frente a 0,841). En Liverpool no
 mejora (0,700 → 0,686 frente a 0,797). Tres partidos no son una evaluación; **2024/25 completa
 sigue sin tocar** y se usa en la evaluación formal.
+
+## Validación cruzada de la vida media en las 6 ligas (2026-10-29)
+
+Mismo protocolo (entrenar del 2016-08-01 al 2023-07-31, probar 2023/24), `λ₂ = 0`. Log-loss:
+
+| Liga | 90 | 180 | 365 | 730 | sin decaimiento | Pinnacle | Gana |
+|---|---|---|---|---|---|---|---|
+| Premier | 0,9551 | 0,9392 | **0,9336** | 0,9361 | 0,9466 | 0,8995 | 365 |
+| LaLiga | 0,9946 | 0,9808 | **0,9760** | 0,9768 | 0,9793 | 0,9510 | 365 |
+| Serie A | 1,0161 | 1,0106 | 1,0050 | **1,0024** | 1,0028 | 0,9639 | 730 |
+| Bundesliga | 1,0232 | 1,0121 | 1,0039 | 0,9995 | **0,9993** | 0,9460 | sin decaimiento |
+| Ligue 1 | 1,0618 | 1,0409 | 1,0335 | 1,0315 | **1,0298** | 1,0142 | sin decaimiento |
+| Segunda | 1,0703 | 1,0602 | 1,0548 | **1,0533** | 1,0545 | 1,0437 | 730 |
+| **Media ponderada (2 224 partidos)** | 1,0207 | 1,0081 | 1,0021 | **1,0010** | 1,0033 | | |
+
+Partidos de prueba con un equipo sin historial: Premier 38, Ligue 1 34, Segunda 82, resto 0. Brier
+sigue el mismo orden.
+
+Diferencia pareada de log-loss respecto a «sin decaimiento» (negativo = mejor), con error típico:
+
+| Liga | 90 | 180 | 365 | 730 |
+|---|---|---|---|---|
+| Premier | +0,0084 ± 0,0180 | −0,0074 ± 0,0141 | −0,0130 ± 0,0092 | −0,0105 ± 0,0052 |
+| LaLiga | +0,0153 ± 0,0106 | +0,0015 ± 0,0083 | −0,0032 ± 0,0061 | −0,0024 ± 0,0039 |
+| Serie A | +0,0133 ± 0,0117 | +0,0078 ± 0,0082 | +0,0022 ± 0,0054 | −0,0004 ± 0,0033 |
+| Bundesliga | +0,0239 ± 0,0124 | +0,0128 ± 0,0095 | +0,0046 ± 0,0066 | +0,0002 ± 0,0039 |
+| Ligue 1 | +0,0320 ± 0,0181 | +0,0111 ± 0,0121 | +0,0037 ± 0,0079 | +0,0017 ± 0,0047 |
+| Segunda | +0,0158 ± 0,0092 | +0,0057 ± 0,0067 | +0,0003 ± 0,0044 | −0,0012 ± 0,0025 |
+| **Conjunto (6 ligas)** | **+0,0174 ± 0,0054** | +0,0048 ± 0,0040 | −0,0012 ± 0,0027 | −0,0023 ± 0,0016 |
+
+**Lectura.**
+- **La ganadora cambia de liga en liga** (365 en 2, 730 en 2, sin decaimiento en 2), pero casi
+  todas las diferencias entre 365, 730 y sin decaimiento están **dentro de un error típico**. No hay
+  evidencia para una vida media por liga.
+- **Lo único claro es que 90 días es peor** (conjunto +0,0174 ± 0,0054, unos 3 errores típicos), y
+  180 es dudoso.
+- **Propuesta: un valor global de 730 días.** Tiene la mejor media ponderada (1,0010), la mejor
+  diferencia conjunta frente a no decaer (−0,0023 ± 0,0016, 1,4 errores típicos: no concluyente) y el
+  menor arrepentimiento en el peor caso (0,0025 en la Premier frente a 0,0046 de 365 en la
+  Bundesliga). Es el borde superior de la malla y en dos ligas no decaer iguala o supera: no se ha
+  probado una vida media mayor (por ejemplo 1 095 días). **La mejora global sobre no decaer es
+  pequeña y sigue sin ser concluyente.** La decisión de fijarlo queda para el usuario; el código no
+  tiene un valor por defecto.
+- **El mercado gana en las 6 ligas** (entre 0,013 y 0,057 de log-loss).
+
+## Malla de λ₂ cerca de 0 (Premier, 2023/24)
+
+| λ₂ | 0 | 0,001 | 0,01 | 0,05 | 0,1 |
+|---|---|---|---|---|---|
+| Vida media 365: log-loss | **0,9336** | 0,9337 | 0,9338 | 0,9342 | 0,9346 |
+| Vida media 730: log-loss | **0,9361** | 0,9361 | 0,9361 | 0,9362 | 0,9363 |
+
+Crece de forma monótona con λ₂: **la mejor sigue siendo 0**. En este dataset la regularización no
+aporta: el equipo medio para los equipos sin historial ya cubre el caso que la L2 debía resolver, y
+los demás tienen decenas de partidos. Se deja implementada (BACKLOG nº 26) pero **no se usa por
+defecto** (`l2 = 0`).

@@ -162,3 +162,35 @@ Calculado con `math` aparte del código (`log P = log τ + x·0,2 − λ − log
 3. ¿Vale el «equipo medio» para equipos sin historial hasta tener la penalización L2?
 4. ¿Vale que el ajuste con 6 partidos se pruebe solo como fallo controlado, y el de recuperación de
    parámetros se haga con datos simulados?
+
+## Estabilidad de ρ (añadido el 2026-10-29)
+
+En la Premier, el ρ ajustado pasó de −0,029 (pesos iguales) a −0,0014 al añadir el decaimiento
+(ADR 009). No es un problema de identificación; es **ruido de estimación** que crece al bajar el
+número efectivo de partidos. Medido con la Hessiana numérica del coste (entrenamiento hasta
+2024-07-31, 3 040 partidos):
+
+| Vida media | N efectivo (Σw)²/Σw² | ρ ± error típico |
+|---|---|---|
+| sin decaimiento | 3 040 | −0,029 ± 0,025 |
+| 730 días | 1 944 | −0,005 ± 0,041 |
+| 365 días | 1 109 | −0,001 ± 0,055 |
+| 180 días | 574 | −0,015 ± 0,079 |
+| 90 días | 315 | −0,048 ± 0,115 |
+
+- **El error típico se duplica al pasar de 3 040 a 1 109 partidos efectivos,** y todas las
+  estimaciones son compatibles entre sí: fijar ρ = −0,03 en el ajuste con vida media 365 baja la
+  log-verosimilitud solo 0,27 (2·Δ, frente a 3,84 del umbral al 95 %).
+- **Identificación:** la correlación de ρ con cualquier otro parámetro es ≤ 0,05 en todos los
+  ajustes, y su perfil de verosimilitud tiene una forma normal. No hay un problema de identificación,
+  solo pocos datos para un parámetro que afecta a cuatro marcadores.
+- **Además podría haber un cambio real en el tiempo,** no demostrado. Sin decaimiento y por bloques
+  de dos temporadas, el ρ de la Premier es −0,103, −0,064, −0,017 y +0,006 (cada uno ± 0,05); la
+  diferencia entre el primero y el último es 0,109 ± 0,072. El decaimiento da más peso a los bloques
+  recientes, donde ρ está más cerca de 0.
+- **No es un rasgo de todas las ligas:** sin decaimiento, 2016-2024, ρ vale −0,042 (LaLiga), −0,052
+  (Serie A), −0,045 (Ligue 1), −0,056 (Segunda) y **−0,135 ± 0,026 (Bundesliga)**, claramente negativo.
+  La Premier (−0,029 ± 0,025) es la más débil.
+- **Consecuencia práctica:** con decaimiento corto, ρ queda mal determinado, pero su efecto en las
+  probabilidades es pequeño (afecta a 0-0, 0-1, 1-0 y 1-1). Una alternativa, **no implementada**, es
+  estimar ρ sin decaimiento o compartirlo entre ligas (BACKLOG nº 27).
