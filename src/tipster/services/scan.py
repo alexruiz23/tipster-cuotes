@@ -1,10 +1,11 @@
 """Orquestación de `tipster scan`: leer, guardar, elegir referencia, evaluar y emitir picks."""
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from tipster.config import Settings
 from tipster.domain.bookmakers import get_bookmaker
@@ -21,6 +22,8 @@ from tipster.pricing.classify import Label, classify
 from tipster.pricing.devig import DevigMethod
 from tipster.providers.base import OddsBatch, OddsProvider, OddsRequest, RequestRecord
 from tipster.services.reference import Reference, select_reference
+from tipster.staking.kelly import kelly_stake
+from tipster.staking.limits import allocate_daily, loss_limit_reached
 from tipster.storage.repositories import (
     EventRepository,
     OddsRepository,
@@ -28,11 +31,16 @@ from tipster.storage.repositories import (
     RunRepository,
     RunStatus,
 )
+from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
 
 STALE_QUOTE = "cuota antigua"
 NO_REFERENCE = "sin referencia válida"
 UNKNOWN_LIQUIDITY = "liquidez desconocida"  # The Odds API no da liquidez ni límites (ADR 001)
 _FATAL = (ProviderAuthError, QuotaExhaustedError)
+ONE_PER_EVENT = "otro pick de este partido tiene más EV"
+ALREADY_OPEN = "ya hay un pick abierto con stake en este partido"
+LOSS_LIMIT = "límite de pérdida diaria alcanzado"
+NO_ROOM = "sin hueco en el tope diario de exposición o por debajo del stake mínimo"
 
 QuoteKey = tuple[str, str, str, str]  # evento, casa, mercado, selección
 
@@ -87,6 +95,8 @@ class ScanService:
         odds: OddsRepository,
         picks: PickRepository,
         runs: RunRepository,
+        bankroll: SqliteBankrollRepository,
+        tracking: SqliteTrackingRepository,
         settings: Settings,
         clock: Callable[[], datetime],
     ) -> None:
@@ -95,6 +105,8 @@ class ScanService:
         self._odds = odds
         self._picks = picks
         self._runs = runs
+        self._bankroll = bankroll
+        self._tracking = tracking
         self._settings = settings
         self._clock = clock
 
@@ -117,6 +129,7 @@ class ScanService:
             self._record_failure(exc, result)
             result.aborted = str(exc)
 
+        self._assign_stakes(result, now)
         result.status = _status(result, fatal)
         self._runs.finish(result.run_id, result.status)
         return result
@@ -267,11 +280,84 @@ class ScanService:
             reference_odds=reference.odds,
             devig_method=reference.method,
             p_market=p_market,
+            w_market=1.0,  # sin modelo (ADR 012): p_final = p_mercado
             p_final=p_market,
             fair_odds=1 / p_market,
             ev=p_market * quote.price - 1,
             label=outcome.label,
             reasons=tuple(reasons),
+        )
+
+    def _assign_stakes(self, result: ScanResult, now: datetime) -> None:
+        """Kelly de 1/4 con topes a los VALUE (ADR 012): un pick por evento, exposición diaria que
+        cuenta los picks abiertos y límite de pérdida diaria. Los demás VALUE quedan en 0."""
+        s = self._settings
+        values = [p for p in result.picks if p.opportunity.label is Label.VALUE]
+        if not values:
+            return
+        self._bankroll.ensure_initial(s.bankroll_initial)
+        bank = self._bankroll.balance()
+        tz = ZoneInfo(s.timezone)
+        pnl = self._bankroll.pnl_between(*_day_bounds(now.astimezone(tz).date(), tz))
+        loss_hit = loss_limit_reached(pnl, bankroll=bank, limit=s.daily_loss_limit)
+        open_events = self._tracking.stake_by_open_event()
+        best: dict[str, Pick] = {}
+        for pick in values:
+            current = best.get(pick.opportunity.event.id)
+            if current is None or pick.opportunity.ev > current.opportunity.ev:
+                best[pick.opportunity.event.id] = pick
+        decided: dict[int, tuple[float, str]] = {}
+        by_day: dict[date, list[tuple[str, float, float]]] = defaultdict(list)
+        for pick in values:
+            o = pick.opportunity
+            if loss_hit:
+                decided[pick.quote_id] = (0.0, LOSS_LIMIT)
+            elif o.event.id in open_events:
+                decided[pick.quote_id] = (0.0, ALREADY_OPEN)
+            elif best[o.event.id] is not pick:
+                decided[pick.quote_id] = (0.0, ONE_PER_EVENT)
+            else:
+                raw = kelly_stake(
+                    bank, o.p_final, o.quote.price, fraction=s.kelly_fraction, cap=s.max_stake
+                )
+                day = o.event.kickoff.astimezone(tz).date()
+                by_day[day].append((str(pick.quote_id), raw, o.ev))
+        for day, candidates in by_day.items():
+            allocation = allocate_daily(
+                candidates,
+                bankroll=bank,
+                daily_cap=s.daily_exposure,
+                min_stake=s.min_stake,
+                already=self._tracking.exposure(*_day_bounds(day, tz)),
+            )
+            for key, stake in allocation.items():
+                reason = (
+                    f"stake {stake:.2f} ({s.kelly_fraction:g} de Kelly, tope {s.max_stake:.0%} "
+                    f"por apuesta y {s.daily_exposure:.0%} diario)"
+                    if stake > 0
+                    else NO_ROOM
+                )
+                decided[int(key)] = (stake, reason)
+        updated: dict[int, Opportunity] = {}
+        for pick in values:
+            stake, reason = decided[pick.quote_id]
+            o = pick.opportunity
+            updated[pick.quote_id] = o.model_copy(
+                update={"stake": stake, "reasons": (*o.reasons, reason)}
+            )
+        result.opportunities = [
+            next((u for q, u in updated.items() if _same(o, u)), o) for o in result.opportunities
+        ]
+        result.picks = [
+            p.model_copy(update={"opportunity": updated[p.quote_id]})
+            if p.quote_id in updated
+            else p
+            for p in result.picks
+        ]
+        self._tracking.set_stakes(
+            result.run_id,
+            {q: o.stake or 0.0 for q, o in updated.items()},
+            {q: o.reasons for q, o in updated.items()},
         )
 
     # -- registro ---------------------------------------------------------------------------
@@ -283,6 +369,18 @@ class ScanService:
     def _record_failure(self, exc: ProviderError, result: ScanResult) -> None:
         if exc.record is not None:
             self._record(exc.record, result)
+
+
+def _day_bounds(day: date, tz: tzinfo) -> tuple[datetime, datetime]:
+    """Inicio y fin (UTC) de un día local."""
+    start = datetime.combine(day, time.min, tzinfo=tz).astimezone(UTC)
+    end = datetime.combine(day + timedelta(days=1), time.min, tzinfo=tz).astimezone(UTC)
+    return start, end
+
+
+def _same(old: Opportunity, new: Opportunity) -> bool:
+    """Es la misma cuota evaluada (la oportunidad nueva solo cambia stake y motivos)."""
+    return old.quote == new.quote and old.label is new.label
 
 
 def _key(quote: OddsQuote) -> QuoteKey:

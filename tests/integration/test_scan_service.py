@@ -27,6 +27,7 @@ from tipster.storage.sqlite import (
     SqliteResponseCache,
     SqliteRunRepository,
 )
+from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "the_odds_api" / "sintetico"
 CAPTURED = datetime(2026, 10, 21, 18, 0, tzinfo=UTC)
@@ -64,6 +65,8 @@ def _service(
         odds=SqliteOddsRepository(conn),
         picks=SqlitePickRepository(conn),
         runs=SqliteRunRepository(conn, clock),
+        bankroll=SqliteBankrollRepository(conn, clock),
+        tracking=SqliteTrackingRepository(conn),
         settings=settings,
         clock=clock,
     )

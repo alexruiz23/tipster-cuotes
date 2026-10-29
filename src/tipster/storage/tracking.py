@@ -1,5 +1,6 @@
 """Bankroll de papel y seguimiento de picks: stakes, exposición, cierre y liquidación (ADR 012)."""
 
+import json
 import sqlite3
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -74,13 +75,23 @@ class SqliteTrackingRepository:
     def __init__(self, conn: sqlite3.Connection) -> None:
         self._conn = conn
 
-    def set_stakes(self, run_id: int, stakes: Mapping[int, float]) -> None:
-        """Stake de cada pick de la ejecución, por id de cuota."""
+    def set_stakes(
+        self,
+        run_id: int,
+        stakes: Mapping[int, float],
+        reasons: Mapping[int, tuple[str, ...]] | None = None,
+    ) -> None:
+        """Stake de cada pick de la ejecución, por id de cuota, y sus motivos si cambian."""
         for quote_id, stake in stakes.items():
             self._conn.execute(
                 "UPDATE picks SET stake = ? WHERE run_id = ? AND quote_id = ?",
                 (stake, run_id, quote_id),
             )
+            if reasons is not None and quote_id in reasons:
+                self._conn.execute(
+                    "UPDATE picks SET reasons_json = ? WHERE run_id = ? AND quote_id = ?",
+                    (json.dumps(list(reasons[quote_id]), ensure_ascii=False), run_id, quote_id),
+                )
         self._conn.commit()
 
     def open_picks(self) -> list[OpenPick]:
@@ -161,9 +172,9 @@ class SqliteTrackingRepository:
         self._conn.commit()
 
     def clv_values(self) -> list[tuple[float, float]]:
-        """(CLV, stake) de los picks con cierre fiable; sin stake cuenta como 0."""
+        """(CLV, stake) de los picks con stake y cierre fiable."""
         rows = self._conn.execute(
-            "SELECT clv, COALESCE(stake, 0) FROM picks"
-            " WHERE closing_reliable = 1 AND clv IS NOT NULL ORDER BY id"
+            "SELECT clv, stake FROM picks"
+            " WHERE closing_reliable = 1 AND clv IS NOT NULL AND stake > 0 ORDER BY id"
         ).fetchall()
         return [(float(r[0]), float(r[1])) for r in rows]

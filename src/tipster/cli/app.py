@@ -37,6 +37,7 @@ from tipster.storage.sqlite import (
     SqliteResponseCache,
     SqliteRunRepository,
 )
+from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
 
 EXIT_RUN_ERROR = 1
 EXIT_CONFIG = 2
@@ -142,6 +143,8 @@ def scan(
             odds=SqliteOddsRepository(conn),
             picks=SqlitePickRepository(conn),
             runs=SqliteRunRepository(conn, clock),
+            bankroll=SqliteBankrollRepository(conn, clock),
+            tracking=SqliteTrackingRepository(conn),
             settings=settings,
             clock=clock,
         ).run()

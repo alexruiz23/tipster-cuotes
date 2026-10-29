@@ -77,3 +77,13 @@ def test_un_stake_bruto_por_debajo_del_minimo_se_descarta() -> None:
 )
 def test_limite_de_perdida_diaria_del_5_por_ciento(pnl: float, reached: bool) -> None:
     assert loss_limit_reached(pnl, bankroll=1000.0) is reached
+
+
+def test_la_exposicion_ya_abierta_reduce_el_hueco_del_dia() -> None:
+    # 60 ya abiertos de un tope de 100: caben 40
+    stakes = allocate_daily([("a", 30.0, 0.09), ("b", 30.0, 0.05)], bankroll=1000.0, already=60.0)
+    assert stakes == {"a": 30.0, "b": 10.0}
+
+
+def test_con_el_dia_ya_completo_no_cabe_nada() -> None:
+    assert allocate_daily([("a", 30.0, 0.09)], bankroll=1000.0, already=100.0) == {"a": 0.0}
