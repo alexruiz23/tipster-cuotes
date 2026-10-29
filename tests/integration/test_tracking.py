@@ -38,6 +38,7 @@ def _make_pick(
     selection: str = "local",
     price: float = 2.20,
     label: Label = Label.VALUE,
+    market_id: str = "1x2",
 ) -> tuple[int, int, int]:
     """Guarda un pick y devuelve (id del pick, id de la cuota, id de la ejecución)."""
     run_id = SqliteRunRepository(conn, clock).start("scan", {})
@@ -49,7 +50,7 @@ def _make_pick(
     request_id = cursor.lastrowid
     assert request_id is not None
     SqliteEventRepository(conn, clock).upsert(make_event(event_id), "the_odds_api", "x" + event_id)
-    quote = make_quote(event_id=event_id, selection=selection, price=price)
+    quote = make_quote(event_id=event_id, selection=selection, price=price, market_id=market_id)
     quote_id = SqliteOddsRepository(conn).add_batch(request_id, [quote])[0]
     SqlitePickRepository(conn).add(
         run_id,

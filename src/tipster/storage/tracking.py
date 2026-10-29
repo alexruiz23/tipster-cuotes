@@ -69,6 +69,7 @@ class OpenPick:
     selection: str
     price: float
     stake: float | None
+    has_closing: bool = False
 
 
 class SqliteTrackingRepository:
@@ -97,7 +98,8 @@ class SqliteTrackingRepository:
     def open_picks(self) -> list[OpenPick]:
         rows = self._conn.execute(
             "SELECT p.id, q.event_id, e.competition_id, e.home_team, e.away_team, e.kickoff_utc,"
-            " q.market_id, q.selection, q.price, p.stake FROM picks p"
+            " q.market_id, q.selection, q.price, p.stake,"
+            " p.closing_captured_at IS NOT NULL AS has_closing FROM picks p"
             " JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id"
             " WHERE p.status = 'abierto' ORDER BY e.kickoff_utc, p.id"
         ).fetchall()
@@ -113,6 +115,7 @@ class SqliteTrackingRepository:
                 r["selection"],
                 r["price"],
                 r["stake"],
+                bool(r["has_closing"]),
             )
             for r in rows
         ]
@@ -178,3 +181,10 @@ class SqliteTrackingRepository:
             " WHERE closing_reliable = 1 AND clv IS NOT NULL AND stake > 0 ORDER BY id"
         ).fetchall()
         return [(float(r[0]), float(r[1])) for r in rows]
+
+    def events_by_external(self, provider: str) -> dict[str, str]:
+        """id del evento en el proveedor → id canónico."""
+        rows = self._conn.execute(
+            "SELECT external_id, event_id FROM event_external_ids WHERE provider = ?", (provider,)
+        ).fetchall()
+        return {r[0]: r[1] for r in rows}

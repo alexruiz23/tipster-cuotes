@@ -1,5 +1,6 @@
 """CLI de tipster-cuotes (Typer): `scan` (Fase 1) e `ingest` (Fase 2)."""
 
+from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
@@ -28,7 +29,9 @@ from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
 from tipster.providers.the_odds_api.client import BASE_URL, TheOddsApiProvider
 from tipster.providers.the_odds_api.offline import OfflineFetcher
+from tipster.services.close import CloseService
 from tipster.services.scan import ScanService
+from tipster.services.settle import SettleService
 from tipster.storage.db import MEMORY, connect
 from tipster.storage.sqlite import (
     SqliteEventRepository,
@@ -38,6 +41,7 @@ from tipster.storage.sqlite import (
     SqliteRunRepository,
 )
 from tipster.storage.tracking import SqliteBankrollRepository, SqliteTrackingRepository
+from tipster.tracking.clv import summarize_clv
 
 EXIT_RUN_ERROR = 1
 EXIT_CONFIG = 2
@@ -348,3 +352,135 @@ def evaluate_command(
     finally:
         conn.close()
     render_evaluation(console, reports, block_days, l2)
+
+
+def _http(settings: Settings, clock: Callable[[], datetime]) -> HttpClient:
+    """Cliente sin caché: el cierre y los resultados deben ser siempre de la hora de la llamada."""
+    assert settings.odds_api_key is not None
+    return HttpClient(
+        provider=TheOddsApiProvider.name,
+        base_url=BASE_URL,
+        secret_params={"apiKey": settings.odds_api_key.get_secret_value()},
+        policy=HttpPolicy(min_interval_s=settings.min_request_interval_s),
+        budget=CreditBudget(settings.max_credits_per_run),
+        cache=None,
+        cache_ttl=timedelta(0),
+        raw_dir=settings.raw_dir,
+        clock=clock,
+    )
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+@app.command("close")
+def close_command(
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Captura el cierre de Pinnacle de los picks con stake que empiezan en unos minutos."""
+    console = Console()
+    settings = _settings(console, None, None)
+    if settings.odds_api_key is None:
+        console.print("[bold red]Falta ODDS_API_KEY.[/] Defínela en .env o en el entorno.")
+        raise typer.Exit(EXIT_CONFIG)
+    conn = connect(db or settings.db_path)
+    try:
+        result = CloseService(
+            provider=TheOddsApiProvider(_http(settings, _now)),
+            tracking=SqliteTrackingRepository(conn),
+            runs=SqliteRunRepository(conn, _now),
+            settings=settings,
+            clock=_now,
+        ).run()
+    finally:
+        conn.close()
+    console.print(
+        f"Cierres fiables: {len(result.captured)} · no fiables: {len(result.unreliable)}",
+        markup=False,
+    )
+    for line in [*result.missing, *result.warnings]:
+        console.print(f"  - {line}", markup=False)
+    if result.aborted:
+        console.print(f"[bold red]Abortado:[/] {result.aborted}")
+        raise typer.Exit(EXIT_RUN_ERROR)
+
+
+def _parse_results(values: list[str] | None) -> dict[str, tuple[int, int]]:
+    parsed: dict[str, tuple[int, int]] = {}
+    for value in values or []:
+        event, _, score = value.partition("=")
+        home, _, away = score.partition("-")
+        if not (event and home.isdigit() and away.isdigit()):
+            raise ValueError(value)
+        parsed[event] = (int(home), int(away))
+    return parsed
+
+
+@app.command("settle")
+def settle_command(
+    result: Annotated[
+        list[str] | None,
+        typer.Option("--result", help="Resultado a mano: EVENTO=GL-GV (repetible)."),
+    ] = None,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Liquida los picks abiertos con los resultados del proveedor y/o los dados a mano."""
+    console = Console()
+    settings = _settings(console, None, None)
+    try:
+        manual = _parse_results(result)
+    except ValueError as exc:
+        console.print(f"[bold red]Resultado mal escrito:[/] {exc}. Formato: EVENTO=GL-GV")
+        raise typer.Exit(EXIT_CONFIG) from exc
+    provider = (
+        TheOddsApiProvider(_http(settings, _now)) if settings.odds_api_key is not None else None
+    )
+    conn = connect(db or settings.db_path)
+    try:
+        bankroll = SqliteBankrollRepository(conn, _now)
+        bankroll.ensure_initial(settings.bankroll_initial)
+        outcome = SettleService(
+            provider=provider,
+            tracking=SqliteTrackingRepository(conn),
+            bankroll=bankroll,
+            runs=SqliteRunRepository(conn, _now),
+            clock=_now,
+        ).run(manual)
+        balance = bankroll.balance()
+    finally:
+        conn.close()
+    n = len(outcome.settled)
+    plural = "s" if n != 1 else ""
+    console.print(f"{n} pick{plural} liquidado{plural} · bankroll {balance:.2f}", markup=False)
+    for line in [*outcome.pending, *outcome.warnings]:
+        console.print(f"  - {line}", markup=False)
+
+
+@app.command("clv")
+def clv_command(
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """CLV de los picks con stake y cierre fiable (cuota tomada frente a la justa de cierre)."""
+    console = Console()
+    settings = _settings(console, None, None)
+    conn = connect(db or settings.db_path)
+    try:
+        summary = summarize_clv(SqliteTrackingRepository(conn).clv_values())
+    finally:
+        conn.close()
+    console.print(f"Picks con CLV: {summary.n}", markup=False)
+    if summary.n == 0:
+        return
+
+    def pct(value: float | None) -> str:
+        return "-" if value is None else f"{value * 100:+.2f} %"
+
+    console.print(
+        f"CLV medio: {pct(summary.mean)} (error típico {pct(summary.stderr)})", markup=False
+    )
+    console.print(f"CLV medio ponderado por stake: {pct(summary.weighted_mean)}", markup=False)
+    console.print(
+        f"Mediana: {pct(summary.median)} · picks con CLV > 0: {summary.share_positive:.0%}",
+        markup=False,
+    )
