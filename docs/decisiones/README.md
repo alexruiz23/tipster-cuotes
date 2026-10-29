@@ -16,3 +16,4 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 | [008](008-dixon-coles-core.md) | Núcleo de Dixon-Coles: verosimilitud y máxima verosimilitud por liga | Aceptada |
 | [009](009-decaimiento-l2-y-malla.md) | Decaimiento temporal, penalización L2 y malla de hiperparámetros | Aceptada |
 | [010](010-elo-davidson.md) | Elo con empate (Elo-Davidson) como segundo modelo | Aceptada |
+| [011](011-evaluacion-formal.md) | Evaluación formal con reajuste (walk-forward estricto) y cierre de la Fase 2 | Aceptada |

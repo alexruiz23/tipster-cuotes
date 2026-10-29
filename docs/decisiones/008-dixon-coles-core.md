@@ -223,6 +223,9 @@ commit `efb1ca9`). Sí hizo lo esperado con la variabilidad: en 40 simulaciones,
 bajó a 0,60 de la de decaer (0,060 frente a 0,100), sin sesgo apreciable. Menos varianza en ρ no se
 traduce en mejor predicción a esta escala (BACKLOG nº 27).
 
+**Excepción en el walk-forward (ADR 011).** Con reajuste diario, un ascendido con 1 o 2 partidos hace
+divergir el ajuste de la Segunda; ahí se usa `λ₂ = 0,01`, que no altera lo que ya convergía.
+
 **Límites.** Con vida media 730 el ρ de la Premier (−0,001) y el de LaLiga (−0,020) quedan casi en 0;
 el error típico del de la Premier es ± 0,041 (el de LaLiga no se midió). La elección de 730 frente a 1 095 es un empate
 estadístico, y la ganancia global frente a no decaer (−0,0023 ± 0,0016) sigue sin ser concluyente.

@@ -48,7 +48,16 @@ def render_evaluation(
         markup=False,
     )
 
-    hyper = Table("liga", "K", "H", "ν", "carry", "δ", "dispersión entre inicios", "equipos nuevos")
+    hyper = Table(
+        "liga",
+        "K",
+        "H",
+        "ν",
+        "carry",
+        "δ",
+        "dispersión entre inicios",
+        "partidos con equipo sin historial (DC)",
+    )
     for r in reports:
         p = r.elo_params
         hyper.add_row(
