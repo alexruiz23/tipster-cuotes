@@ -1,4 +1,4 @@
-# 007 — Histórico, ruptura de Pinnacle, Dixon-Coles y validación walk-forward
+# 007 — Histórico, ruptura de Pinnacle, Dixon-Coles, Elo y validación walk-forward
 
 **Estado:** Propuesta (2026-10-29) · **Fecha:** 2026-10-29
 
@@ -9,8 +9,8 @@ hasta entonces.** Los datos que se citan salen de la
 
 ## Contexto
 
-La Fase 2 (PLAN §6) construye el histórico, un Dixon-Coles y una evaluación sin fuga de datos que
-compara el modelo con la probabilidad del mercado. Lo verificado condiciona el diseño:
+La Fase 2 (PLAN §6) construye el histórico, **dos modelos, Dixon-Coles y Elo (este como segundo
+modelo)**, y una evaluación sin fuga de datos que compara ambos con la probabilidad del mercado. Lo verificado condiciona el diseño:
 
 - Las 6 ligas están en `mmz4281/<temporada>/<E0|SP1|SP2|I1|D1|F1>.csv`, de 1993/94 a 2026/27. No hay
   Champions ni cuotas de Ambos Marcan.
@@ -137,7 +137,25 @@ P(x, y) = τ(x, y; λ, μ, ρ) · Poisson(x; λ) · Poisson(y; μ)
   evalúa en la F2.
 - **Equipos nuevos:** un ascendido sin partidos en la liga entra con ataque y defensa de la media
   (penalización L2). Es una limitación declarada; no se carga la segunda división para evitarla.
-- **Elo** queda fuera de este ADR: PLAN §6 exige un ADR propio sobre cómo obtener el empate.
+
+### Elo (segundo modelo, dentro del alcance de la Fase 2)
+
+PLAN §6 incluye `models/elo.py` como segundo modelo. Su papel es comparar con Dixon-Coles y con el
+mercado y, si los resultados lo justifican, servir de ensamble o de respaldo de Dixon-Coles. **Cómo
+se usa en conjunto (ensamble o respaldo) no se diseña aquí:** depende de los resultados de la
+comparación y se decide después.
+
+- **Qué fija este ADR:** Elo se alimenta solo de resultados anteriores a la fecha de predicción,
+  entra en las mismas reglas de validación (sección 4: mismos tramos, mismos partidos, mismas
+  métricas, ninguna cuota como entrada) y se informa junto a Dixon-Coles y el mercado.
+- **Hiperparámetros** (factor K, ventaja de campo y rating inicial de los equipos nuevos): se
+  eligen en el tramo de validación, como los de Dixon-Coles. No se fija ningún valor aquí.
+- **Qué falta y requiere un ADR propio (008) antes de implementar:** cómo convertir la diferencia
+  de Elo en probabilidades de 1X2. El Elo no da la probabilidad de empate por sí solo, y esa
+  decisión (PLAN §6) se toma por escrito antes de escribir `elo.py`.
+- **Tests a mano:** actualización de rating tras un resultado concreto (PLAN §6); la suma de las
+  probabilidades 1X2 es 1; y un test que falla si Elo usa un resultado de fecha igual o posterior a
+  la que predice.
 
 ### Tests (casos a mano, como en la F1)
 La matriz suma 1; la corrección τ a mano en 0-0, 1-0, 0-1 y 1-1; los tres mercados a mano desde una
@@ -165,7 +183,8 @@ Reglas, todas con test:
    tienen referencia o resultado se excluyen y se cuentan en el informe.
 7. **Métricas:** Brier multiclase, log-loss y tabla de fiabilidad para 1X2 (y para O/U 2.5 con la
    cuota de cierre de Pinnacle de `PC>2.5`/`PC<2.5`, donde exista). Diferencias pareadas modelo-mercado con
-   intervalo por remuestreo por jornada. Si el mercado gana, el informe lo dice tal cual.
+   intervalo por remuestreo por jornada. El informe compara Dixon-Coles, Elo y el mercado
+   sobre los mismos partidos; si el mercado gana, lo dice tal cual.
 8. **Reproducibilidad:** el informe incluye los `sha256` de los CSV, la referencia usada y la
    semilla; ejecutar dos veces da el mismo resultado.
 
