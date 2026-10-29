@@ -196,3 +196,33 @@ número efectivo de partidos. Medido con la Hessiana numérica del coste (entren
 - **Consecuencia práctica:** con decaimiento corto, ρ queda mal determinado, pero su efecto en las
   probabilidades es pequeño (afecta a 0-0, 0-1, 1-0 y 1-1). Una alternativa, **no implementada**, es
   estimar ρ sin decaimiento o compartirlo entre ligas (BACKLOG nº 27).
+
+## Hiperparámetros finales (2026-10-29)
+
+Elegidos con el walk-forward simple de las seis ligas (entrenar hasta 2022/23, probar 2023/24). **No se
+ha usado 2024/25**, que sigue siendo el test ciego.
+
+| Hiperparámetro | Valor final | Evidencia |
+|---|---|---|
+| Vida media | **730 días**, global | Mejor media ponderada del log-loss (1,0010). Frente a 365: ninguna liga se separa más de 0,005; frente a 1 095 es un empate estadístico (+0,0003 ± 0,0005 a favor de 730), y gana la regla acordada. No hay base para valores por liga ([ADR 009](009-decaimiento-l2-y-malla.md)) |
+| λ₂ | **0** | La mejor en cada malla probada (0 a 10, y 0,001 a 0,1 con vida media 365 y 730); la regularización no aporta (BACKLOG nº 26) |
+| ρ | **se estima con el mismo decaimiento** | Estimarlo con pesos iguales (el resto con decaimiento) no mejora |
+
+**Experimento de ρ sin decaimiento** (vida media 730; positivo = peor que decaer también ρ):
+
+| Liga | ρ con decaimiento | ρ sin decaimiento | Δ log-loss ± error típico |
+|---|---|---|---|
+| Premier | −0,0010 | −0,0362 | +0,0009 ± 0,0010 |
+| Bundesliga | −0,1379 | −0,1324 | −0,0002 ± 0,0016 |
+| Conjunto 6 ligas | | | +0,00006 ± 0,0003 |
+
+(Con vida media 365 el conjunto es +0,0021 ± 0,0018, también peor.) El criterio acordado era una
+mejora de más de un error típico: **no se cumple en ninguna de las dos ligas**, así que la opción se
+**quitó del código** (se implementó con pesos distintos en `log τ` y se revirtió; queda en el
+commit `efb1ca9`). Sí hizo lo esperado con la variabilidad: en 40 simulaciones, la desviación de ρ
+bajó a 0,60 de la de decaer (0,060 frente a 0,100), sin sesgo apreciable. Menos varianza en ρ no se
+traduce en mejor predicción a esta escala (BACKLOG nº 27).
+
+**Límites.** Con vida media 730 los ρ de la Premier (−0,001) y de LaLiga (−0,020) quedan casi en 0;
+sus errores típicos son del orden de ± 0,04. La elección de 730 frente a 1 095 es un empate
+estadístico, y la ganancia global frente a no decaer (−0,0023 ± 0,0016) sigue sin ser concluyente.

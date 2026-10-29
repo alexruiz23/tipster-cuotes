@@ -155,3 +155,26 @@ Crece de forma monótona con λ₂: **la mejor sigue siendo 0**. En este dataset
 aporta. Explicación posible, **no probada**: el equipo medio ya cubre a los equipos sin historial y
 el resto tiene decenas de partidos. Se deja implementada (BACKLOG nº 26) pero **no se usa por
 defecto** (`l2 = 0`).
+
+## Vida media de 1 095 días frente a 730 (2026-10-29)
+
+Mismo protocolo y `λ₂ = 0`. Regla acordada de antemano: si 1 095 es mejor o igual que 730, se usa
+1 095; si 730 sigue ganando, se fija 730. Log-loss:
+
+| Liga | 365 | 730 | 1 095 | 1 460 | sin decaimiento |
+|---|---|---|---|---|---|
+| Premier | 0,9336 | 0,9361 | 0,9385 | 0,9401 | 0,9466 |
+| LaLiga | 0,9760 | 0,9768 | 0,9777 | 0,9781 | 0,9793 |
+| Serie A | 1,0050 | 1,0024 | 1,0020 | 1,0020 | 1,0028 |
+| Bundesliga | 1,0039 | 0,9995 | 0,9988 | 0,9986 | 0,9993 |
+| Ligue 1 | 1,0335 | 1,0315 | 1,0309 | 1,0306 | 1,0298 |
+| Segunda | 1,0548 | 1,0533 | 1,0534 | 1,0535 | 1,0545 |
+| **Media ponderada** | 1,0021 | **1,0010** | 1,0014 | 1,0017 | 1,0033 |
+
+Diferencia pareada 1 095 − 730 (negativo = 1 095 mejor): Premier +0,0024 ± 0,0016, LaLiga +0,0008 ±
+0,0011, Serie A −0,0004 ± 0,0010, Bundesliga −0,0008 ± 0,0012, Ligue 1 −0,0006 ± 0,0014, Segunda
++0,0001 ± 0,0008. **Conjunto: +0,0003 ± 0,0005.**
+
+**730 sigue ganando en la media (1,0010 frente a 1,0014)**, aunque la diferencia es 0,6 errores
+típicos: es un empate estadístico, con un óptimo muy plano entre 730 y 1 095. Se aplica la regla y
+se fija **730 días**. (1 095 gana en tres ligas por menos de 0,001, y 1 460 no mejora.)
