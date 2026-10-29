@@ -68,7 +68,11 @@ class Opportunity(BaseModel):
     reference_odds: tuple[tuple[str, float], ...]  # cuotas exactas del devig, en orden de selección
     devig_method: DevigMethod
     p_market: float
-    p_model: float | None = None  # F2–F3
+    p_model: float | None = None  # Dixon-Coles calibrado
+    p_model_raw: float | None = None  # sin calibrar
+    w_market: float | None = None  # peso del mercado en la mezcla (1 sin modelo)
+    model_name: str | None = None
+    model_version: str | None = None  # id de la configuración de mezcla
     p_final: float
     fair_odds: float
     ev: float

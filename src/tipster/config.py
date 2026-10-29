@@ -14,6 +14,7 @@ from pydantic import (
     Field,
     NonNegativeFloat,
     NonNegativeInt,
+    PositiveFloat,
     PositiveInt,
     SecretStr,
     field_validator,
@@ -62,6 +63,15 @@ class Settings(BaseSettings):
     max_quote_age_minutes: PositiveInt = 10
     max_reference_age_minutes: PositiveInt = 10
     timezone: str = "Europe/Madrid"
+    # Fase 3 (ADR 012): bankroll de papel, Kelly y límites
+    bankroll_initial: PositiveFloat = 1000.0
+    kelly_fraction: float = Field(default=0.25, gt=0, le=1)
+    max_stake: float = Field(default=0.02, gt=0, le=1)  # por apuesta, fracción del bankroll
+    daily_exposure: float = Field(default=0.10, gt=0, le=1)
+    daily_loss_limit: float = Field(default=0.05, gt=0, le=1)  # provisional
+    min_stake: float = Field(default=0.0025, ge=0, lt=1)
+    closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio
+    closing_max_age_minutes: PositiveInt = 30  # una captura más lejana del inicio no es fiable
 
     @field_validator("competitions", "markets", "bookmakers", "reference_order", mode="before")
     @classmethod

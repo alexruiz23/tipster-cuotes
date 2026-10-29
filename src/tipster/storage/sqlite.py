@@ -179,8 +179,9 @@ class SqlitePickRepository:
             self._conn.execute(
                 "INSERT INTO picks (run_id, quote_id, label, feed_es, reference_bookmaker_id,"
                 " reference_captured_at, reference_odds_json, devig_method, p_market, p_model,"
-                " p_final, fair_odds, ev, stake, reasons_json, created_at)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                " p_final, fair_odds, ev, stake, reasons_json, created_at, p_model_raw, w_market,"
+                " model_name, model_version)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     run_id,
                     pick.quote_id,
@@ -198,6 +199,10 @@ class SqlitePickRepository:
                     o.stake,
                     json.dumps(list(o.reasons), ensure_ascii=False),
                     iso(pick.created_at),
+                    o.p_model_raw,
+                    o.w_market,
+                    o.model_name,
+                    o.model_version,
                 ),
             )
         self._conn.commit()
@@ -227,6 +232,10 @@ class SqlitePickRepository:
                 devig_method=DevigMethod(row["devig_method"]),
                 p_market=row["p_market"],
                 p_model=row["p_model"],
+                p_model_raw=row["p_model_raw"],
+                w_market=row["w_market"],
+                model_name=row["model_name"],
+                model_version=row["model_version"],
                 p_final=row["p_final"],
                 fair_odds=row["fair_odds"],
                 ev=row["ev"],

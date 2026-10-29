@@ -174,7 +174,7 @@ def _rows(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def test_la_migracion_crea_el_historico(conn: sqlite3.Connection) -> None:
-    assert schema_versions(conn) == [1, 2]
+    assert schema_versions(conn) == [1, 2, 3]
     columns = {r["name"] for r in conn.execute("PRAGMA table_info(historical_matches)")}
     assert {"competition_id", "match_date", "home_team_id", "away_team_id", "home_goals"} <= columns
     assert {"pinnacle_home", "pinnacle_draw", "pinnacle_away", "odds_source"} <= columns
