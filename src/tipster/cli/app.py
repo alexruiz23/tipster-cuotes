@@ -4,6 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
+from zoneinfo import ZoneInfo
 
 import numpy as np
 import typer
@@ -33,6 +34,7 @@ from tipster.providers.the_odds_api.offline import OfflineFetcher
 from tipster.services.close import CloseService
 from tipster.services.scan import ScanService
 from tipster.services.settle import SettleService
+from tipster.services.status import MIN_SAMPLE, paper_status
 from tipster.storage.db import MEMORY, connect
 from tipster.storage.sqlite import (
     SqliteEventRepository,
@@ -532,6 +534,50 @@ def bankroll_show(db: Annotated[Path | None, _DB] = None) -> None:
     for at, kind, amount, after in rows:
         console.print(f"{at[:16]}  {kind:<11} {amount:+9.2f}  {after:9.2f}", markup=False)
     console.print(f"bankroll {balance:.2f}", markup=False)
+
+
+@app.command("status")
+def status_command(
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Estado del paper trading: bankroll, picks abiertos, resultados, ROI y CLV."""
+    console = Console()
+    settings = _settings(console, None, None)
+    conn = connect(db or settings.db_path)
+    try:
+        SqliteBankrollRepository(conn, _now).ensure_initial(settings.bankroll_initial)
+        st = paper_status(conn)
+    finally:
+        conn.close()
+    tz = ZoneInfo(settings.timezone)
+    since = "-" if st.started is None else st.started.astimezone(tz).strftime("%Y-%m-%d")
+    out = console.print
+    out(f"PAPER TRADING desde {since}", markup=False)
+    out(f"Bankroll:   {st.balance:9.2f} €", markup=False)
+    out(
+        f"  depósitos {st.deposits:.2f} · retiros {st.withdrawals:.2f} · "
+        f"profit acumulado {st.profit:+.2f}",
+        markup=False,
+    )
+    out(
+        f"Abiertos:   {st.open_picks} picks con stake · exposición {st.open_exposure:.2f} €",
+        markup=False,
+    )
+    out(
+        f"Liquidados: {st.settled} (ganados {st.won} · perdidos {st.lost} · nulos {st.void})",
+        markup=False,
+    )
+    roi = "-" if st.roi is None else f"{st.roi:+.1%} sobre {st.staked_settled:.2f} € apostados"
+    out(f"ROI:        {roi}", markup=False)
+    if st.settled < MIN_SAMPLE:
+        out(
+            f"  Muestra insuficiente: {st.settled} < {MIN_SAMPLE} picks; el ROI aún no dice nada.",
+            markup=False,
+        )
+    if st.clv.mean is None:
+        out("CLV medio:  sin datos de cierre fiable todavía", markup=False)
+    else:
+        out(f"CLV medio:  {st.clv.mean * 100:+.2f} % en {st.clv.n} picks", markup=False)
 
 
 @app.command("clv")

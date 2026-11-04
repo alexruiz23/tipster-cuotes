@@ -20,6 +20,8 @@ picks reales en papel.
 
 ## Estado
 
+**Paper trading desde el 2026-11-04.** `tipster status` muestra de un vistazo el bankroll, los picks abiertos, los liquidados, el ROI (con aviso de «muestra insuficiente» por debajo de 50 picks) y el CLV medio.
+
 **Fase 3 cerrada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`, `clv`):
 implementada y validada con datos pasados (`w = 1`; el cierre de Pinnacle se mantiene bien calibrado en
 2024/25, [ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)). **Pendiente: paper trading en
@@ -160,4 +162,4 @@ launchctl list | grep tipster            # estado; `launchctl kickstart gui/$(id
 
 **El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 5,0], stake entre 0,50 € y 2 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
 
-Para que el paper trading funcione, el Mac debe estar despierto (o con `caffeinate -s` activo) durante los 15 minutos previos al inicio de los partidos con picks. El repo debe estar fuera de Desktop/Documents/Downloads: launchd no puede leerlos (TCC de macOS).
+**Aviso: el Mac debe estar despierto** (o con `caffeinate -s` activo) para que corran los agentes: `close` (cada 5 minutos, captura el cierre de Pinnacle y solo hace algo en los 15 minutos previos al inicio de un partido con pick) y `settle` (a las 04:00; con el Mac dormido a esa hora no se ejecuta y liquida en la siguiente ocasión, siempre que el partido siga dentro de los 3 días que alcanza `/scores`). `scan` corre los viernes a las 12:00. Un cierre que se pierde no se recupera: el pick queda sin CLV. El repo debe estar fuera de Desktop/Documents/Downloads: launchd no puede leerlos (TCC de macOS).
