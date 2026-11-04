@@ -95,7 +95,7 @@ no garantiza que sumen 1: queda como alternativa si las tablas de fiabilidad mue
   mercados distintos están correlacionadas; el tratamiento conjunto queda para la Fase 4.
 - **Tope diario de exposición:** 10 % del bankroll por día de partido (zona Europe/Madrid, suma de los
   stakes de ese día). Se reparte por EV decreciente; el que no cabe se recorta al hueco restante y, si
-  queda por debajo del **stake mínimo (1 % del bankroll desde el 04/11/2026; antes 0,25 %, ver «Bankroll de 100 €»)**, se descarta.
+  queda por debajo del **stake mínimo (0,5 % del bankroll desde el 04/11/2026; antes 0,25 %, ver «Configuración para bankroll de 100 €»)**, se descarta.
 - **Pérdida diaria máxima (del PLAN §7, que tu lista no mencionaba):** si las pérdidas liquidadas en un día
   alcanzan el 5 % del bankroll (valor provisional), no se recomienda nada más ese día. Test obligatorio.
 - **Solo VALUE lleva stake.** «POSIBLE ERROR», «REVISIÓN MANUAL», «DESCARTADA» y «SIN VALOR» no apuestan.
@@ -345,17 +345,22 @@ Cuota 1X2 de Pinnacle en Serie A (local / empate / visitante) a distintos minuto
 - **El pick #40 (Schalke – Leipzig, 31/10) no tiene cierre ni resultado:** `close` no se ejecutó ese día (sin automatización) y `daysFrom` llega a 3 días, de modo que 4 días después `/scores` ya no lo devuelve. No se ha inventado ningún dato; queda abierto hasta tener el marcador real (`--result`).
 - La sonda del 29/10 (arriba) es la única observación de Pinnacle cerca del inicio; el 31/10 no se capturó nada, así que sigue sin cierre real.
 
-## Bankroll de 100 € (04/11/2026)
+## Configuración para bankroll de 100 € (04/11/2026)
 
-El capital real es de **100 €**, no 1 000. Con 1 000 € y mínimo del 0,25 % (2,50 €), 7 de los 8 VALUE del primer escaneo quedaron con stake 0: su 1/4 de Kelly era de 1,3–2,2 €. No era un fallo de Kelly, sino que las cuotas largas dan fracciones muy pequeñas. Se adapta la configuración:
+El capital real es de **100 €**, no 1 000. Con 1 000 € y mínimo del 0,25 % (2,50 €), 7 de los 8 VALUE del primer escaneo quedaron con stake 0: su 1/4 de Kelly era de 1,3–2,2 €. No era un fallo de Kelly, sino que las cuotas largas dan fracciones muy pequeñas. Configuración vigente:
 
 | Parámetro | Antes | Ahora |
 |---|---|---|
 | `bankroll_initial` | 1 000 | **100** |
-| `min_stake` (fracción del bankroll) | 0,0025 (0,25 %) | **0,01** (1 % = 1 € con 100 €) |
+| stake mínimo (`min_stake`, fracción del bankroll) | 0,0025 (0,25 %) | **0,005** (0,5 % = **0,50 €**) |
+| stake máximo (`max_stake`) | 2 % | 2 % = **2 €** (sin cambios) |
 | `max_odds` | 10,0 | **5,0** |
+| `min_odds` | — | **1,5** |
+| Kelly, tope diario (10 %) | 1/4, 10 € | sin cambios |
 
-- **Stake mínimo:** si 1/4 de Kelly sale por debajo del 1 % del bankroll (1 € con 100 €), el stake es 0. Es una fracción, no un importe fijo: con otro bankroll el mínimo escala. Con el tope del 2 % por apuesta, un stake válido está entre 1 € y 2 €; el tope diario del 10 % son 10 €.
-- **`max_odds = 5,0`:** una cuota por encima no recibe stake ni compite en su partido (el rango de trabajo es 1,5–5,0; no hay mínimo de cuota implementado). Justificación: con bankrolls pequeños, las cuotas altas implican un riesgo de ruina inaceptable. El sizing de Kelly fraccionado no debe usarse para cuotas > 5,0 con este capital. Como en `max_odds = 10`, el valor es prudencia, no está ajustado con datos.
-- **No es retroactivo.** `bankroll_initial` solo se usa al crear el depósito; la base actual conserva el depósito de 1 000 € y la liquidación del #40 (saldo 995,29 €). Los picks ya generados no se recalculan. Para empezar en 100 € hay que crear una base nueva o corregir el libro a mano (no hecho).
-- **Tests:** valores por defecto, cuota 10 bloqueada por `max_odds`, y 1/4 de Kelly < 1 € ⇒ stake 0. Los tests de escaneo anteriores fijan 1 000 / 0,25 % / 10 de forma explícita en su helper.
+- **Rango de cuotas [1,5, 5,0]:** fuera de él, el pick sigue mostrándose pero con stake 0 y el motivo escrito, y no compite con los demás picks de su partido. Con bankrolls pequeños, las cuotas altas implican un riesgo de ruina inaceptable: el sizing de Kelly fraccionado no debe usarse para cuotas > 5,0 con este capital. Las cuotas < 1,5 dejan un margen que no compensa la comisión implícita ni la varianza del modelo. Ambos límites son prudencia, no están ajustados con datos.
+- **Stake mínimo 0,50 €:** si 1/4 de Kelly sale por debajo del 0,5 % del bankroll, el stake es 0. Es una fracción, no un importe: con otro bankroll el mínimo escala. Con el tope del 2 %, el rango útil de Kelly es [0,50 €, 2 €]. Se baja desde 1 € porque con 1 € casi ningún pick sería accionable; con 0,50 € el sistema es operativo sin romper la protección de Kelly.
+- **Base de datos nueva (04/11/2026):** la anterior se conserva en `data/tipster.sqlite.old` (59 picks, ninguno con efecto en el bankroll salvo el #40). La nueva arranca con un depósito de 100 € y conserva solo los datos de referencia: equipos, histórico de Hugging Face y la mezcla elegida (`blend_configs`), para no tener que repetir `ingest` ni `select-blend`.
+- **Limitación:** con un bankroll de 100 €, el crecimiento es lento y muchos picks con EV bajo y cuota alta quedarán con stake 0. El sistema está diseñado para proteger el capital, no para maximizar el número de apuestas.
+- **Repetición del último scan (04/11, 17:20 UTC, sin gastar créditos):** 10 VALUE, 0 accionables; todos tenían cuota > 5,0 (7,5 a 26).
+- **Tests:** valores por defecto, cuota 10 bloqueada por `max_odds`, cuota 1,20 bloqueada por `min_odds`, y 1/4 de Kelly < 0,50 € ⇒ stake 0. Los tests de escaneo anteriores fijan 1 000 / 0,25 % / 10 de forma explícita en su helper.

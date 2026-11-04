@@ -158,4 +158,6 @@ scripts/launchd/instalar.sh desinstalar
 launchctl list | grep tipster            # estado; `launchctl kickstart gui/$(id -u)/com.tipster.close` lo dispara
 ```
 
+**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 5,0], stake entre 0,50 € y 2 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
+
 Para que el paper trading funcione, el Mac debe estar despierto (o con `caffeinate -s` activo) durante los 15 minutos previos al inicio de los partidos con picks. El repo debe estar fuera de Desktop/Documents/Downloads: launchd no puede leerlos (TCC de macOS).

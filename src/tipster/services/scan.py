@@ -295,6 +295,9 @@ class ScanService:
         self, o: Opportunity, *, loss_hit: bool, open_events: dict[str, float]
     ) -> str | None:
         """Motivo por el que un VALUE no puede llevar stake, o None."""
+        min_odds = self._settings.min_odds
+        if o.quote.price < min_odds:
+            return f"cuota {o.quote.price:g} por debajo de min_odds {min_odds:g}"
         max_odds = self._settings.max_odds
         if o.quote.price > max_odds:
             return (
@@ -320,8 +323,8 @@ class ScanService:
         open_events = self._tracking.stake_by_open_event()
         best: dict[str, Pick] = {}
         for pick in values:
-            if pick.opportunity.quote.price > s.max_odds:
-                continue  # una cuota demasiado larga no compite por el stake del partido
+            if not s.min_odds <= pick.opportunity.quote.price <= s.max_odds:
+                continue  # una cuota fuera de rango no compite por el stake del partido
             current = best.get(pick.opportunity.event.id)
             if current is None or pick.opportunity.ev > current.opportunity.ev:
                 best[pick.opportunity.event.id] = pick

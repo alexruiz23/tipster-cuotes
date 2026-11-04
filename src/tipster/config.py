@@ -71,7 +71,8 @@ class Settings(BaseSettings):
     daily_loss_limit: float = Field(default=0.05, gt=0, le=1)  # provisional
     # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado
     max_odds: float = Field(default=5.0, gt=1)
-    min_stake: float = Field(default=0.01, ge=0, lt=1)  # fracción del bankroll: 1 € con 100 €
+    min_odds: float = Field(default=1.5, gt=1)
+    min_stake: float = Field(default=0.005, ge=0, lt=1)  # fracción del bankroll: 0,50 € con 100 €
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio
 
     @field_validator("competitions", "markets", "bookmakers", "reference_order", mode="before")
