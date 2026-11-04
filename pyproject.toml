@@ -54,6 +54,7 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]  # macOS marca como ocultos los ficheros de .venv y Python 3.12 ignora el .pth editable
 addopts = "-ra --strict-markers"
 
 [dependency-groups]
