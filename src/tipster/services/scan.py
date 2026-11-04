@@ -322,9 +322,8 @@ class ScanService:
         tz = ZoneInfo(s.timezone)
         pnl = self._bankroll.pnl_between(*_day_bounds(now.astimezone(tz).date(), tz))
         flat = s.sizing_strategy == "flat"
-        # los límites flat son importes en €; `allocate_daily` y `loss_limit_reached` piden fracción
-        daily_cap = (s.max_daily_exposure / bank if bank > 0 else 0.0) if flat else s.daily_exposure
-        loss_limit = (s.max_daily_loss / bank if bank > 0 else 0.0) if flat else s.daily_loss_limit
+        daily_cap = s.max_daily_exposure_pct if flat else s.daily_exposure
+        loss_limit = s.max_daily_loss_pct if flat else s.daily_loss_limit
         loss_hit = loss_limit_reached(pnl, bankroll=bank, limit=loss_limit)
         open_events = self._tracking.stake_by_open_event()
         best: dict[str, Pick] = {}
@@ -375,7 +374,7 @@ class ScanService:
             )
             for key, stake in allocation.items():
                 sizing = (
-                    f"flat, {s.max_daily_exposure:g} € diarios"
+                    f"flat, {s.max_daily_exposure_pct:.1%} del bankroll diario"
                     if flat
                     else f"{s.kelly_fraction:g} de Kelly, tope {s.max_stake:.0%} "
                     f"por apuesta y {s.daily_exposure:.0%} diario"

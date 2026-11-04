@@ -149,7 +149,7 @@ def test_la_configuracion_por_defecto_es_la_de_100_euros() -> None:
     assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 15.0)
     assert (s.sizing_strategy, s.stake_pct) == ("flat", 0.01)
     assert (s.min_stake_abs, s.max_stake_abs) == (0.5, 5.0)
-    assert (s.max_daily_exposure, s.max_daily_loss) == (5.0, 10.0)
+    assert (s.max_daily_exposure_pct, s.max_daily_loss_pct) == (0.05, 0.10)
 
 
 def test_una_cuota_de_20_se_descarta_por_el_max_odds_por_defecto(
@@ -266,10 +266,12 @@ def test_con_flat_max_odds_15_bloquea_el_16_75_y_deja_pasar_el_10_5(
 
 def test_con_flat_el_limite_diario_de_exposicion_se_respeta(conn: sqlite3.Connection) -> None:
     # los dos partidos con stake son de días distintos (25/10 y 26/10): cada día tiene su tope
-    staked = [o.stake for o in _value(_scan(conn, _flat(max_daily_exposure=0.5))) if o.stake]
+    staked = [o.stake for o in _value(_scan(conn, _flat(max_daily_exposure_pct=0.005))) if o.stake]
     assert staked == [0.5, 0.5]  # el stake de 1 € se recorta al hueco del día
     conn2 = connect(MEMORY)
-    sin_hueco = _value(_scan(conn2, _flat(max_daily_exposure=0.4)))  # hueco < mínimo de 0,50 €
+    sin_hueco = _value(
+        _scan(conn2, _flat(max_daily_exposure_pct=0.004))
+    )  # hueco < mínimo de 0,50 €
     assert all(o.stake == 0.0 for o in sin_hueco)
     conn2.close()
 
@@ -279,6 +281,19 @@ def test_con_flat_la_perdida_diaria_en_euros_apaga_las_recomendaciones(
 ) -> None:
     _scan(conn, _flat())
     pick_id = conn.execute("SELECT id FROM picks ORDER BY id LIMIT 1").fetchone()[0]
-    SqliteBankrollRepository(conn, lambda: CAPTURED).settle(pick_id, -10.0)  # max_daily_loss
+    SqliteBankrollRepository(conn, lambda: CAPTURED).settle(
+        pick_id, -10.0
+    )  # 10 % de 100: el límite
     second = _value(_scan(conn, _flat()))
     assert second and all(o.stake == 0.0 and EXTRA_LOSS in o.reasons[-1] for o in second)
+
+
+def test_con_flat_los_limites_diarios_se_calculan_con_el_bankroll_del_scan(
+    conn: sqlite3.Connection,
+) -> None:
+    bank = SqliteBankrollRepository(conn, lambda: CAPTURED)
+    bank.ensure_initial(100.0)
+    bank.deposit(100.0)  # bankroll 200: stake 2 €
+    # 0,5 % de 200 = 1 €: el stake de 2 € se recorta al hueco del día
+    staked = [o.stake for o in _value(_scan(conn, _flat(max_daily_exposure_pct=0.005))) if o.stake]
+    assert staked == [1.0, 1.0]

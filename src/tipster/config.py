@@ -68,12 +68,9 @@ class Settings(BaseSettings):
     stake_pct: float = Field(default=0.01, gt=0, le=1)  # sizing flat: fracción del bankroll actual
     min_stake_abs: PositiveFloat = 0.50  # € mínimo por apuesta con sizing flat
     max_stake_abs: PositiveFloat = 5.0  # € máximo por apuesta con sizing flat
-    max_daily_exposure: PositiveFloat = (
-        5.0  # € por día de partido (solo flat; kelly usa daily_exposure)
-    )
-    max_daily_loss: PositiveFloat = (
-        10.0  # € de pérdida diaria (solo flat; kelly usa daily_loss_limit)
-    )
+    # solo flat, fracción del bankroll actual en el momento del scan (kelly usa los dos de abajo)
+    max_daily_exposure_pct: float = Field(default=0.05, gt=0, le=1)
+    max_daily_loss_pct: float = Field(default=0.10, gt=0, le=1)
     bankroll_initial: PositiveFloat = 100.0
     kelly_fraction: float = Field(default=0.25, gt=0, le=1)
     max_stake: float = Field(default=0.02, gt=0, le=1)  # por apuesta, fracción del bankroll

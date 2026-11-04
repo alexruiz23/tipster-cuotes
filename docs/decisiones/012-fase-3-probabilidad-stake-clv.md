@@ -376,8 +376,8 @@ El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de
 | `min_stake_abs` / `max_stake_abs` | 0,50 € / 5,0 € |
 | `min_odds` / `max_odds` | 1,5 / **15,0** |
 | `bankroll_initial` | 100 € |
-| `max_daily_exposure` | 5,0 € por día de partido (solo flat; kelly sigue usando `daily_exposure`, 10 %) |
-| `max_daily_loss` | 10,0 € (solo flat; kelly sigue usando `daily_loss_limit`, 5 %) |
+| `max_daily_exposure_pct` | 5 % del bankroll actual por día de partido (solo flat; kelly sigue usando `daily_exposure`, 10 %) |
+| `max_daily_loss_pct` | 10 % del bankroll actual (solo flat; kelly sigue usando `daily_loss_limit`, 5 %) |
 
 - Con flat, el stake no depende del EV ni de la cuota, solo del bankroll. Siguen aplicando: solo VALUE, un pick por evento (el de mayor EV), cuota dentro de [`min_odds`, `max_odds`], exposición abierta del día y pérdida diaria. Un stake recortado por el tope diario por debajo de `min_stake` (0,5 %) pasa a 0.
 - Con flat, el riesgo de una cuota alta es acotado porque el stake es fijo; por eso `max_odds` sube a 15,0. **Con un bankroll de 100 € no se opera por encima de cuota 15,0: esas cuotas quedan fuera por riesgo de varianza.** El valor no está ajustado con datos y el sesgo favorito-longshot (arriba) sigue siendo el mayor riesgo de sobrestimar el EV.
@@ -388,8 +388,9 @@ El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de
 
 ## Gestión de capital (04/11/2026)
 
-- **Stake dinámico:** con `sizing_strategy = "flat"` el stake de cada pick es `max(min_stake_abs, min(max_stake_abs, bankroll_actual · stake_pct))`, con `stake_pct = 0,01`, `min_stake_abs = 0,50 €` y `max_stake_abs = 5,0 €` (sustituye al `flat_stake` fijo de 1 €). Los límites absolutos evitan stakes ridículos o desproporcionados. Bankroll 100 € → 1 €; 200 € → 2 €; 50 € → 0,50 € (el mínimo); 500 € → 5 € (el máximo). El stake sigue sin depender del EV ni de la cuota. Los topes diarios (5 € de exposición, 10 € de pérdida) son importes fijos: con un bankroll mayor habrá que subirlos a mano.
+- **Stake dinámico:** con `sizing_strategy = "flat"` el stake de cada pick es `max(min_stake_abs, min(max_stake_abs, bankroll_actual · stake_pct))`, con `stake_pct = 0,01`, `min_stake_abs = 0,50 €` y `max_stake_abs = 5,0 €` (sustituye al `flat_stake` fijo de 1 €). Los límites absolutos evitan stakes ridículos o desproporcionados. Bankroll 100 € → 1 €; 200 € → 2 €; 50 € → 0,50 € (el mínimo); 500 € → 5 € (el máximo). El stake sigue sin depender del EV ni de la cuota. Los topes diarios son porcentajes del bankroll **en el momento del scan** (5 % de exposición, 10 % de pérdida): con 100 € son 5 € y 10 €, y crecen o decrecen con el bankroll.
 - **Ingresos y retiros:** `tipster bankroll deposit <€>`, `tipster bankroll withdraw <€>` y `tipster bankroll show`. Cada movimiento es una fila de `bankroll_entries` (`deposito` o `retiro`, con fecha y cantidad con signo; la migración 0004 añade `retiro`; se usan los nombres en español del resto del libro). El bankroll actual es la suma de todos los movimientos, incluidas las liquidaciones (`SqliteBankrollRepository.balance()`, que usan `scan` y `bankroll show`). No se puede retirar más de lo que hay. Los depósitos y retiros no cuentan como pérdida diaria.
 - **Política de retiros:** el usuario puede retirar cuando quiera; el stake se ajusta solo al nuevo bankroll. **Recomendación: no retirar hasta que el bankroll sea al menos el doble del inicial (200 €)**, para dar margen a la varianza.
 - **Limitación:** el programa no lo impide; es una recomendación. Un retiro hace bajar el stake de los picks siguientes, pero no cambia los ya recomendados y abiertos.
+- **Cómo se aplica el tope diario (`allocate_daily`):** el tope es por **día de partido** (zona Europe/Madrid), no por scan; los 6 picks del scan offline eran de tres días (2, 3 y 1), por eso sumaban 6 €. Dentro de un día, los picks se ordenan por EV decreciente y se asigna el stake de cada uno; el que no cabe se **recorta al hueco que queda** y, si ese hueco es menor que el stake mínimo (0,5 % del bankroll), se **descarta (stake 0)**. La exposición ya abierta ese día cuenta. No se redondea para «llenar» el tope.
 
