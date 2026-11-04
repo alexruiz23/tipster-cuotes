@@ -367,20 +367,21 @@ El capital real es de **100 €**, no 1 000. Con 1 000 € y mínimo del 0,25 % 
 
 ## Estrategia de sizing con bankroll pequeño (04/11/2026)
 
-El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de un VALUE de cuota 5–26 y EV 3–9 % es de 0,1–0,9 € y casi todo cae por debajo del mínimo. **Se usa flat betting de 1 € por apuesta como estrategia operativa.** Esto sustituye al `max_odds = 5,0` y al rango de stake «[0,50 €, 2 €]» de la sección anterior (el resto, base nueva de 100 € y `min_odds = 1,5`, sigue vigente).
+El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de un VALUE de cuota 5–26 y EV 3–9 % es de 0,1–0,9 € y casi todo cae por debajo del mínimo. **Se usa flat betting de 1 € por apuesta como estrategia operativa.** **Esta configuración sustituye a la de la sección anterior** (`max_odds = 5,0`, rango de stake [0,50 €, 2 €]); siguen vigentes la base nueva de 100 € y `min_odds = 1,5`.
 
 | Parámetro | Valor por defecto |
 |---|---|
 | `sizing_strategy` | `"flat"` (alternativa: `"kelly"`, el Kelly fraccionado anterior) |
 | `flat_stake` | 1,0 € |
-| `min_odds` / `max_odds` | 1,5 / 10,0 |
+| `min_odds` / `max_odds` | 1,5 / **15,0** |
+| `bankroll_initial` | 100 € |
 | `max_daily_exposure` | 5,0 € por día de partido (solo flat; kelly sigue usando `daily_exposure`, 10 %) |
 | `max_daily_loss` | 10,0 € (solo flat; kelly sigue usando `daily_loss_limit`, 5 %) |
 
 - Con flat, el stake no depende del EV ni de la cuota. Siguen aplicando: solo VALUE, un pick por evento (el de mayor EV), cuota dentro de [`min_odds`, `max_odds`], exposición abierta del día y pérdida diaria. Un stake recortado por el tope diario por debajo de `min_stake` (0,5 %) pasa a 0.
-- Con flat, el riesgo de una cuota alta es acotado porque el stake es fijo; por eso `max_odds` vuelve a 10. Sigue sin estar ajustado con datos y el sesgo favorito-longshot (arriba) sigue siendo el mayor riesgo de sobrestimar el EV.
+- Con flat, el riesgo de una cuota alta es acotado porque el stake es fijo; por eso `max_odds` sube a 15,0. **Con un bankroll de 100 € no se opera por encima de cuota 15,0: esas cuotas quedan fuera por riesgo de varianza.** El valor no está ajustado con datos y el sesgo favorito-longshot (arriba) sigue siendo el mayor riesgo de sobrestimar el EV.
 - **Limitación: la varianza es alta.** Con 100 € y cuotas de 10,0, una racha de 10 pérdidas seguidas deja sin bankroll. Es un riesgo aceptado.
 - **Alternativa recomendada:** cuando el bankroll llegue a 1 000 € o más, cambiar a `sizing_strategy = "kelly"` (BACKLOG nº 36).
-- **Repetición del scan del 04/11 (17:20 UTC, sin gastar créditos):** 10 VALUE, **3 accionables** (Mainz – Bayern 7,5; Valencia – Real Madrid 9,0; Como – Cagliari 9,2), **3 € en total**; los demás quedaron en 0 por cuota > 10 (6 picks) o por no ser el mejor de su partido (1). Máximo por día: 2 € (7/11), por debajo del tope de 5 €.
-- **Tests:** flat da 1 € a los elegidos con EV y cuota distintos; kelly conserva el comportamiento anterior; una cuota de 16,75 recibe stake con flat si `max_odds` la admite (con `max_odds = 10` no); el tope diario de exposición y el de pérdida diaria en euros se respetan.
+- **Repetición del scan del 04/11 (17:20 UTC, sin gastar créditos), con `max_odds = 15`:** 10 VALUE, **6 accionables** (Real Madrid – Celta 13,75; Leverkusen – Paderborn 10,5; Mainz – Bayern 7,5; Valencia – Real Madrid 9,0; Barcelona – Villarreal 11,0; Como – Cagliari 9,2), **6 € en total**. Los otros 4 quedaron en 0: 3 por cuota 26 > 15 y 1 por no ser el mejor de su partido. Máximo por día: 3 € (21/11), por debajo del tope de 5 €.
+- **Tests:** flat da 1 € a los elegidos con EV y cuota distintos; kelly conserva el comportamiento anterior; con `max_odds = 15` una cuota de 16,75 se bloquea y una de 10,5 pasa (con `max_odds = 10`, la de 10,5 se bloquea); el tope diario de exposición y el de pérdida diaria en euros se respetan.
 

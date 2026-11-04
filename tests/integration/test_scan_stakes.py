@@ -146,12 +146,12 @@ def test_una_cuota_por_encima_de_max_odds_no_lleva_stake_ni_compite_en_su_partid
 
 def test_la_configuracion_por_defecto_es_la_de_100_euros() -> None:
     s = Settings(_env_file=None)
-    assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 10.0)
+    assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 15.0)
     assert (s.sizing_strategy, s.flat_stake) == ("flat", 1.0)
     assert (s.max_daily_exposure, s.max_daily_loss) == (5.0, 10.0)
 
 
-def test_una_cuota_de_12_se_descarta_por_el_max_odds_por_defecto(
+def test_una_cuota_de_20_se_descarta_por_el_max_odds_por_defecto(
     conn: sqlite3.Connection,
 ) -> None:
     service = _service(
@@ -162,9 +162,9 @@ def test_una_cuota_de_12_se_descarta_por_el_max_odds_por_defecto(
             ODDS_API_KEY=KEY,
         ),
     )
-    quote = make_quote(price=12.0)
+    quote = make_quote(price=20.0)
     reason = service._blocked(make_opportunity(quote=quote), loss_hit=False, open_events={})
-    assert reason == "cuota 12 por encima de max_odds 10 (sesgo favorito-longshot)"
+    assert reason == "cuota 20 por encima de max_odds 15 (sesgo favorito-longshot)"
 
 
 def test_una_cuota_de_1_20_se_descarta_por_el_min_odds_por_defecto(
@@ -246,20 +246,21 @@ def test_con_kelly_el_comportamiento_anterior_se_mantiene(conn: sqlite3.Connecti
         assert "de Kelly" in o.reasons[-1]
 
 
-def test_con_flat_una_cuota_de_16_75_recibe_stake_si_max_odds_la_admite(
+def test_con_flat_max_odds_15_bloquea_el_16_75_y_deja_pasar_el_10_5(
     conn: sqlite3.Connection,
 ) -> None:
-    def blocked(max_odds: float) -> str | None:
+    def blocked(price: float, max_odds: float) -> str | None:
         service = _service(
             conn,
             TheOddsApiProvider(OfflineFetcher(FIXTURES)),
             Settings(_env_file=None, ODDS_API_KEY=KEY, sizing_strategy="flat", max_odds=max_odds),
         )
-        quote = make_quote(price=16.75)
+        quote = make_quote(price=price)
         return service._blocked(make_opportunity(quote=quote), loss_hit=False, open_events={})
 
-    assert blocked(20.0) is None  # con flat, la cuota larga no se descarta por Kelly
-    assert blocked(10.0) == "cuota 16.75 por encima de max_odds 10 (sesgo favorito-longshot)"
+    assert blocked(16.75, 15.0) == "cuota 16.75 por encima de max_odds 15 (sesgo favorito-longshot)"
+    assert blocked(10.5, 15.0) is None
+    assert blocked(10.5, 10.0) == "cuota 10.5 por encima de max_odds 10 (sesgo favorito-longshot)"
 
 
 def test_con_flat_el_limite_diario_de_exposicion_se_respeta(conn: sqlite3.Connection) -> None:
