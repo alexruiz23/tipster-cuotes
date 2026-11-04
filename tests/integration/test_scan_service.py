@@ -45,6 +45,11 @@ def _settings(**overrides: object) -> Settings:
     values: dict[str, object] = {
         "competitions": ("laliga", "premier", "segunda"),
         "ODDS_API_KEY": KEY,
+        # los casos a mano de estos tests parten de 1 000 y cuotas ≤ 10; los valores por defecto
+        # (100, mínimo 1 %, max_odds 5) se comprueban aparte en test_scan_stakes.py
+        "bankroll_initial": 1000.0,
+        "min_stake": 0.0025,
+        "max_odds": 10.0,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]

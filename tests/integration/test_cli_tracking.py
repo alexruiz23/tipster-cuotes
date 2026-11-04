@@ -50,7 +50,7 @@ def test_settle_manual_liquida_sin_clave_y_actualiza_el_bankroll(db: Path) -> No
     )
     assert (
         conn.execute("SELECT balance_after FROM bankroll_entries ORDER BY id DESC").fetchone()[0]
-        == 1024.0
+        == 124.0
     )
 
 

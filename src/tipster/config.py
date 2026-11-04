@@ -64,14 +64,14 @@ class Settings(BaseSettings):
     max_reference_age_minutes: PositiveInt = 10
     timezone: str = "Europe/Madrid"
     # Fase 3 (ADR 012): bankroll de papel, Kelly y límites
-    bankroll_initial: PositiveFloat = 1000.0
+    bankroll_initial: PositiveFloat = 100.0
     kelly_fraction: float = Field(default=0.25, gt=0, le=1)
     max_stake: float = Field(default=0.02, gt=0, le=1)  # por apuesta, fracción del bankroll
     daily_exposure: float = Field(default=0.10, gt=0, le=1)
     daily_loss_limit: float = Field(default=0.05, gt=0, le=1)  # provisional
     # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado
-    max_odds: float = Field(default=10.0, gt=1)
-    min_stake: float = Field(default=0.0025, ge=0, lt=1)
+    max_odds: float = Field(default=5.0, gt=1)
+    min_stake: float = Field(default=0.01, ge=0, lt=1)  # fracción del bankroll: 1 € con 100 €
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio
 
     @field_validator("competitions", "markets", "bookmakers", "reference_order", mode="before")

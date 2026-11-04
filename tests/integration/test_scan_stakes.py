@@ -5,6 +5,7 @@ from collections.abc import Iterator
 
 import pytest
 
+from tests.factories import make_opportunity, make_quote
 from tests.integration.test_scan_service import (
     CAPTURED,
     FIXTURES,
@@ -143,8 +144,45 @@ def test_una_cuota_por_encima_de_max_odds_no_lleva_stake_ni_compite_en_su_partid
             )
 
 
-def test_max_odds_vale_10_por_defecto() -> None:
-    assert Settings(_env_file=None).max_odds == 10.0
+def test_la_configuracion_por_defecto_es_la_de_100_euros() -> None:
+    s = Settings(_env_file=None)
+    assert (s.bankroll_initial, s.min_stake, s.max_odds) == (100.0, 0.01, 5.0)  # mínimo: 1 €
+
+
+def test_una_cuota_de_10_se_descarta_por_el_max_odds_por_defecto(
+    conn: sqlite3.Connection,
+) -> None:
+    service = _service(
+        conn,
+        TheOddsApiProvider(OfflineFetcher(FIXTURES)),
+        Settings(
+            _env_file=None,
+            ODDS_API_KEY=KEY,
+        ),
+    )
+    quote = make_quote(price=10.0)
+    reason = service._blocked(make_opportunity(quote=quote), loss_hit=False, open_events={})
+    assert reason == "cuota 10 por encima de max_odds 5 (sesgo favorito-longshot)"
+
+
+def test_un_cuarto_de_kelly_por_debajo_de_1_euro_da_stake_0() -> None:
+    # p = 0,25, cuota 4,25: f* = 0,0192 → 1/4 de Kelly = 0,48 € con 100 €
+    raw = kelly_stake(100.0, 0.25, 4.25)
+    assert raw == pytest.approx(0.48, abs=0.005) and raw < 0.01 * 100.0
+
+
+def test_con_100_euros_ningun_stake_baja_de_1_euro(conn: sqlite3.Connection) -> None:
+    result = _scan(conn, _settings(bankroll_initial=100.0, min_stake=0.01))
+    values = _value(result)
+    assert values and all(o.stake == 0.0 or o.stake >= 1.0 for o in values)
+
+
+def test_un_minimo_de_2_euros_deja_en_0_el_kelly_de_1_29_euros(conn: sqlite3.Connection) -> None:
+    result = _scan(conn, _settings(bankroll_initial=100.0, min_stake=0.02))
+    unstaked = [o for o in _value(result) if o.reasons[-1] != EXTRA_ONE_PER_EVENT]
+    assert unstaked and all(
+        o.stake == 0.0 and "por debajo del mínimo 2.00%" in o.reasons[-1] for o in unstaked
+    )
 
 
 def test_el_motivo_dice_que_el_kelly_no_llega_al_minimo(conn: sqlite3.Connection) -> None:
