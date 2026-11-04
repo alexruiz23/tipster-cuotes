@@ -65,7 +65,9 @@ class Settings(BaseSettings):
     timezone: str = "Europe/Madrid"
     # Fase 3 (ADR 012): bankroll de papel, sizing y límites
     sizing_strategy: Literal["flat", "kelly"] = "flat"
-    flat_stake: PositiveFloat = 1.0  # € por apuesta con sizing flat
+    stake_pct: float = Field(default=0.01, gt=0, le=1)  # sizing flat: fracción del bankroll actual
+    min_stake_abs: PositiveFloat = 0.50  # € mínimo por apuesta con sizing flat
+    max_stake_abs: PositiveFloat = 5.0  # € máximo por apuesta con sizing flat
     max_daily_exposure: PositiveFloat = (
         5.0  # € por día de partido (solo flat; kelly usa daily_exposure)
     )

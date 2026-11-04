@@ -471,6 +471,69 @@ def settle_command(
         console.print(f"  - {line}", markup=False)
 
 
+bankroll_app = typer.Typer(
+    help="Saldo, ingresos y retiros del bankroll de papel.", no_args_is_help=True
+)
+app.add_typer(bankroll_app, name="bankroll")
+
+
+def _bankroll_move(action: str, amount: float, db: Path | None) -> None:
+    console = Console()
+    settings = _settings(console, None, None)
+    conn = connect(db or settings.db_path)
+    try:
+        bankroll = SqliteBankrollRepository(conn, _now)
+        bankroll.ensure_initial(settings.bankroll_initial)
+        try:
+            balance = getattr(bankroll, action)(amount)
+        except ValueError as exc:
+            console.print(f"[bold red]{exc}[/]")
+            raise typer.Exit(EXIT_CONFIG) from exc
+    finally:
+        conn.close()
+    console.print(f"bankroll {balance:.2f}", markup=False)
+
+
+_AMOUNT = typer.Argument(min=0.01, help="Cantidad en €.")
+_DB = typer.Option("--db", help="Base de datos.")
+
+
+@bankroll_app.command("deposit")
+def bankroll_deposit(
+    amount: Annotated[float, _AMOUNT], db: Annotated[Path | None, _DB] = None
+) -> None:
+    """Ingresa `amount` en el bankroll."""
+    _bankroll_move("deposit", amount, db)
+
+
+@bankroll_app.command("withdraw")
+def bankroll_withdraw(
+    amount: Annotated[float, _AMOUNT], db: Annotated[Path | None, _DB] = None
+) -> None:
+    """Retira `amount` del bankroll (no puede superar el saldo)."""
+    _bankroll_move("withdraw", amount, db)
+
+
+@bankroll_app.command("show")
+def bankroll_show(db: Annotated[Path | None, _DB] = None) -> None:
+    """Muestra el saldo y los movimientos."""
+    console = Console()
+    settings = _settings(console, None, None)
+    conn = connect(db or settings.db_path)
+    try:
+        bankroll = SqliteBankrollRepository(conn, _now)
+        bankroll.ensure_initial(settings.bankroll_initial)
+        rows = conn.execute(
+            "SELECT at, kind, amount, balance_after FROM bankroll_entries"
+        ).fetchall()
+        balance = bankroll.balance()
+    finally:
+        conn.close()
+    for at, kind, amount, after in rows:
+        console.print(f"{at[:16]}  {kind:<11} {amount:+9.2f}  {after:9.2f}", markup=False)
+    console.print(f"bankroll {balance:.2f}", markup=False)
+
+
 @app.command("clv")
 def clv_command(
     db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,

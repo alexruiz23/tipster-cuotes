@@ -147,7 +147,8 @@ def test_una_cuota_por_encima_de_max_odds_no_lleva_stake_ni_compite_en_su_partid
 def test_la_configuracion_por_defecto_es_la_de_100_euros() -> None:
     s = Settings(_env_file=None)
     assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 15.0)
-    assert (s.sizing_strategy, s.flat_stake) == ("flat", 1.0)
+    assert (s.sizing_strategy, s.stake_pct) == ("flat", 0.01)
+    assert (s.min_stake_abs, s.max_stake_abs) == (0.5, 5.0)
     assert (s.max_daily_exposure, s.max_daily_loss) == (5.0, 10.0)
 
 

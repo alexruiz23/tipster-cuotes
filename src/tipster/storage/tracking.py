@@ -10,7 +10,9 @@ from tipster.storage.db import from_iso, iso
 
 
 class SqliteBankrollRepository:
-    """Libro de movimientos: un depósito inicial y una liquidación por pick (idempotente)."""
+    """Libro de movimientos: depósitos, retiros y una liquidación por pick (idempotente).
+
+    El saldo es la suma de los `amount` (con signo); `balance_after` es el saldo acumulado."""
 
     def __init__(self, conn: sqlite3.Connection, clock: Callable[[], datetime]) -> None:
         self._conn = conn
@@ -31,6 +33,26 @@ class SqliteBankrollRepository:
             (iso(self._clock()), amount, amount),
         )
         self._conn.commit()
+
+    def deposit(self, amount: float) -> float:
+        return self._move("deposito", amount)
+
+    def withdraw(self, amount: float) -> float:
+        """Retira `amount`; falla si supera el saldo."""
+        if amount > self.balance() + 1e-9:
+            raise ValueError(
+                f"no se puede retirar {amount:.2f}: el bankroll es {self.balance():.2f}"
+            )
+        return self._move("retiro", -amount)
+
+    def _move(self, kind: str, amount: float) -> float:
+        balance = round(self.balance() + amount, 2)
+        self._conn.execute(
+            "INSERT INTO bankroll_entries (at, kind, amount, balance_after) VALUES (?, ?, ?, ?)",
+            (iso(self._clock()), kind, amount, balance),
+        )
+        self._conn.commit()
+        return balance
 
     def settle(self, pick_id: int, amount: float) -> float:
         """Anota el resultado de un pick; si ya estaba liquidado no cambia nada."""

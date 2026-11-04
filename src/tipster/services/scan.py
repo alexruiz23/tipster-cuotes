@@ -22,6 +22,7 @@ from tipster.pricing.classify import Label, classify
 from tipster.pricing.devig import DevigMethod
 from tipster.providers.base import OddsBatch, OddsProvider, OddsRequest, RequestRecord
 from tipster.services.reference import Reference, select_reference
+from tipster.staking.flat import flat_stake
 from tipster.staking.kelly import kelly_stake
 from tipster.staking.limits import LIMIT_TOL, allocate_daily, loss_limit_reached
 from tipster.storage.repositories import (
@@ -309,9 +310,9 @@ class ScanService:
         return ALREADY_OPEN if o.event.id in open_events else None
 
     def _assign_stakes(self, result: ScanResult, now: datetime) -> None:
-        """Stake a los VALUE (ADR 012): flat de `flat_stake` o Kelly de 1/4 con topes; un pick por
-        evento, exposición diaria que cuenta los picks abiertos y límite de pérdida diaria. Los
-        demás VALUE quedan en 0."""
+        """Stake a los VALUE (ADR 012): flat (`stake_pct` del bankroll) o Kelly de 1/4 con topes;
+        un pick por evento, exposición diaria que cuenta los picks abiertos y límite de pérdida
+        diaria. Los demás VALUE quedan en 0."""
         s = self._settings
         values = [p for p in result.picks if p.opportunity.label is Label.VALUE]
         if not values:
@@ -344,7 +345,12 @@ class ScanService:
                 decided[pick.quote_id] = (0.0, ONE_PER_EVENT)
             else:
                 raw = (
-                    s.flat_stake
+                    flat_stake(
+                        bank,
+                        pct=s.stake_pct,
+                        min_abs=s.min_stake_abs,
+                        max_abs=s.max_stake_abs,
+                    )
                     if flat
                     else kelly_stake(
                         bank, o.p_final, o.quote.price, fraction=s.kelly_fraction, cap=s.max_stake

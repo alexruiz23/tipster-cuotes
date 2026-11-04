@@ -372,16 +372,24 @@ El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de
 | Parámetro | Valor por defecto |
 |---|---|
 | `sizing_strategy` | `"flat"` (alternativa: `"kelly"`, el Kelly fraccionado anterior) |
-| `flat_stake` | 1,0 € |
+| `stake_pct` | 1 % del bankroll actual (ver «Gestión de capital») |
+| `min_stake_abs` / `max_stake_abs` | 0,50 € / 5,0 € |
 | `min_odds` / `max_odds` | 1,5 / **15,0** |
 | `bankroll_initial` | 100 € |
 | `max_daily_exposure` | 5,0 € por día de partido (solo flat; kelly sigue usando `daily_exposure`, 10 %) |
 | `max_daily_loss` | 10,0 € (solo flat; kelly sigue usando `daily_loss_limit`, 5 %) |
 
-- Con flat, el stake no depende del EV ni de la cuota. Siguen aplicando: solo VALUE, un pick por evento (el de mayor EV), cuota dentro de [`min_odds`, `max_odds`], exposición abierta del día y pérdida diaria. Un stake recortado por el tope diario por debajo de `min_stake` (0,5 %) pasa a 0.
+- Con flat, el stake no depende del EV ni de la cuota, solo del bankroll. Siguen aplicando: solo VALUE, un pick por evento (el de mayor EV), cuota dentro de [`min_odds`, `max_odds`], exposición abierta del día y pérdida diaria. Un stake recortado por el tope diario por debajo de `min_stake` (0,5 %) pasa a 0.
 - Con flat, el riesgo de una cuota alta es acotado porque el stake es fijo; por eso `max_odds` sube a 15,0. **Con un bankroll de 100 € no se opera por encima de cuota 15,0: esas cuotas quedan fuera por riesgo de varianza.** El valor no está ajustado con datos y el sesgo favorito-longshot (arriba) sigue siendo el mayor riesgo de sobrestimar el EV.
 - **Limitación: la varianza es alta.** Con 100 € y cuotas de 10,0, una racha de 10 pérdidas seguidas deja sin bankroll. Es un riesgo aceptado.
 - **Alternativa recomendada:** cuando el bankroll llegue a 1 000 € o más, cambiar a `sizing_strategy = "kelly"` (BACKLOG nº 36).
 - **Repetición del scan del 04/11 (17:20 UTC, sin gastar créditos), con `max_odds = 15`:** 10 VALUE, **6 accionables** (Real Madrid – Celta 13,75; Leverkusen – Paderborn 10,5; Mainz – Bayern 7,5; Valencia – Real Madrid 9,0; Barcelona – Villarreal 11,0; Como – Cagliari 9,2), **6 € en total**. Los otros 4 quedaron en 0: 3 por cuota 26 > 15 y 1 por no ser el mejor de su partido. Máximo por día: 3 € (21/11), por debajo del tope de 5 €.
 - **Tests:** flat da 1 € a los elegidos con EV y cuota distintos; kelly conserva el comportamiento anterior; con `max_odds = 15` una cuota de 16,75 se bloquea y una de 10,5 pasa (con `max_odds = 10`, la de 10,5 se bloquea); el tope diario de exposición y el de pérdida diaria en euros se respetan.
+
+## Gestión de capital (04/11/2026)
+
+- **Stake dinámico:** con `sizing_strategy = "flat"` el stake de cada pick es `max(min_stake_abs, min(max_stake_abs, bankroll_actual · stake_pct))`, con `stake_pct = 0,01`, `min_stake_abs = 0,50 €` y `max_stake_abs = 5,0 €` (sustituye al `flat_stake` fijo de 1 €). Los límites absolutos evitan stakes ridículos o desproporcionados. Bankroll 100 € → 1 €; 200 € → 2 €; 50 € → 0,50 € (el mínimo); 500 € → 5 € (el máximo). El stake sigue sin depender del EV ni de la cuota. Los topes diarios (5 € de exposición, 10 € de pérdida) son importes fijos: con un bankroll mayor habrá que subirlos a mano.
+- **Ingresos y retiros:** `tipster bankroll deposit <€>`, `tipster bankroll withdraw <€>` y `tipster bankroll show`. Cada movimiento es una fila de `bankroll_entries` (`deposito` o `retiro`, con fecha y cantidad con signo; la migración 0004 añade `retiro`; se usan los nombres en español del resto del libro). El bankroll actual es la suma de todos los movimientos, incluidas las liquidaciones (`SqliteBankrollRepository.balance()`, que usan `scan` y `bankroll show`). No se puede retirar más de lo que hay. Los depósitos y retiros no cuentan como pérdida diaria.
+- **Política de retiros:** el usuario puede retirar cuando quiera; el stake se ajusta solo al nuevo bankroll. **Recomendación: no retirar hasta que el bankroll sea al menos el doble del inicial (200 €)**, para dar margen a la varianza.
+- **Limitación:** el programa no lo impide; es una recomendación. Un retiro hace bajar el stake de los picks siguientes, pero no cambia los ya recomendados y abiertos.
 
