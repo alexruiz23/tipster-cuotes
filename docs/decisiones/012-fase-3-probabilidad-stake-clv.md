@@ -338,3 +338,9 @@ Cuota 1X2 de Pinnacle en Serie A (local / empate / visitante) a distintos minuto
 
 - **Pinnacle mueve su cuota a lo largo del día** y todavía a ~35 minutos del inicio, y **en estos dos partidos no se movió entre 15 y 5 minutos antes**. Entre los 35 y los 15 minutos el cambio fue pequeño (probabilidad justa del local 54,9 % → 55,2 %; cuota justa 1,82 → 1,81).
 - **Alcance:** 2 partidos, una liga, un día. No se puede distinguir «Pinnacle no se movió» de «la API no refrescó en esos minutos», aunque sí refresca en el resto del día. Es evidencia a favor de la regla de la ventana de 15 minutos, no una verificación; se completa con los cierres reales de `tipster close`.
+
+### Primer `settle` real (04/11/2026)
+
+- `/scores` responde con la estructura prevista (`completed`, `scores[{name, score}]`) y liquidó Barcelona – Aston Villa. Tres llamadas (EPL, Serie A, Champions).
+- **El pick #40 (Schalke – Leipzig, 31/10) no tiene cierre ni resultado:** `close` no se ejecutó ese día (sin automatización) y `daysFrom` llega a 3 días, de modo que 4 días después `/scores` ya no lo devuelve. No se ha inventado ningún dato; queda abierto hasta tener el marcador real (`--result`).
+- La sonda del 29/10 (arriba) es la única observación de Pinnacle cerca del inicio; el 31/10 no se capturó nada, así que sigue sin cierre real.
