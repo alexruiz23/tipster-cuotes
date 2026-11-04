@@ -150,12 +150,12 @@ cada fase (handoff) está en su plan; el de la Fase 1, en
 
 ## Automatización local (macOS)
 
-`scripts/close.sh` y `scripts/settle.sh` miran antes la base local y no llaman a la API (0 créditos) si no hay nada que hacer: `close` solo actúa con picks con stake que empiezan en los próximos `TIPSTER_CLOSING_WINDOW_MINUTES` (15) y `settle` con picks abiertos de entre 2 h y 3 días atrás (`/scores` no llega más lejos). Registro en `data/logs/`.
+`scripts/close.sh`, `scripts/settle.sh` y `scripts/scan.sh` (viernes a las 12:00 locales, ~14 créditos) miran antes la base local y no llaman a la API (0 créditos) si no hay nada que hacer: `close` solo actúa con picks con stake que empiezan en los próximos `TIPSTER_CLOSING_WINDOW_MINUTES` (15) y `settle` con picks abiertos de entre 2 h y 3 días atrás (`/scores` no llega más lejos). Registro en `data/logs/`.
 
 ```
-scripts/launchd/instalar.sh              # `close` cada 5 min y `settle` a diario a las 04:00 locales
+scripts/launchd/instalar.sh              # `close` cada 5 min, `settle` a diario a las 04:00 locales y `scan` los viernes a las 12:00
 scripts/launchd/instalar.sh desinstalar
 launchctl list | grep tipster            # estado; `launchctl kickstart gui/$(id -u)/com.tipster.close` lo dispara
 ```
 
-Solo corre con el Mac encendido y despierto. `scan` sigue siendo manual: sin picks con stake no hay nada que cerrar.
+Para que el paper trading funcione, el Mac debe estar despierto (o con `caffeinate -s` activo) durante los 15 minutos previos al inicio de los partidos con picks. El repo debe estar fuera de Desktop/Documents/Downloads: launchd no puede leerlos (TCC de macOS).
