@@ -146,11 +146,12 @@ def test_una_cuota_por_encima_de_max_odds_no_lleva_stake_ni_compite_en_su_partid
 
 def test_la_configuracion_por_defecto_es_la_de_100_euros() -> None:
     s = Settings(_env_file=None)
-    assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 5.0)
-    assert s.min_stake * s.bankroll_initial == 0.5  # stake mínimo: 0,50 €
+    assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 10.0)
+    assert (s.sizing_strategy, s.flat_stake) == ("flat", 1.0)
+    assert (s.max_daily_exposure, s.max_daily_loss) == (5.0, 10.0)
 
 
-def test_una_cuota_de_10_se_descarta_por_el_max_odds_por_defecto(
+def test_una_cuota_de_12_se_descarta_por_el_max_odds_por_defecto(
     conn: sqlite3.Connection,
 ) -> None:
     service = _service(
@@ -161,9 +162,9 @@ def test_una_cuota_de_10_se_descarta_por_el_max_odds_por_defecto(
             ODDS_API_KEY=KEY,
         ),
     )
-    quote = make_quote(price=10.0)
+    quote = make_quote(price=12.0)
     reason = service._blocked(make_opportunity(quote=quote), loss_hit=False, open_events={})
-    assert reason == "cuota 10 por encima de max_odds 5 (sesgo favorito-longshot)"
+    assert reason == "cuota 12 por encima de max_odds 10 (sesgo favorito-longshot)"
 
 
 def test_una_cuota_de_1_20_se_descarta_por_el_min_odds_por_defecto(
@@ -221,3 +222,61 @@ def test_el_motivo_dice_que_no_hay_hueco_diario_cuando_el_kelly_si_llega(
     result = _scan(conn, _settings(daily_exposure=0.002))  # hueco de 2,00 < mínimo de 2,50
     best = [o for o in _value(result) if o.reasons[-1] != EXTRA_ONE_PER_EVENT]
     assert best and all(o.stake == 0.0 and o.reasons[-1] == NO_ROOM for o in best)
+
+
+def _flat(**overrides: object) -> Settings:
+    return _settings(sizing_strategy="flat", bankroll_initial=100.0, min_stake=0.005, **overrides)
+
+
+def test_con_flat_todo_pick_elegido_recibe_1_euro_sin_importar_ev_ni_cuota(
+    conn: sqlite3.Connection,
+) -> None:
+    values = _value(_scan(conn, _flat()))
+    staked = [o for o in values if o.stake]
+    assert len({o.event.id for o in staked}) == len(staked) == 2  # un pick por evento
+    assert {o.stake for o in staked} == {1.0}
+    assert len({round(o.ev, 3) for o in staked}) > 1  # EV y cuota distintos, mismo stake
+    assert all("flat" in o.reasons[-1] for o in staked)
+
+
+def test_con_kelly_el_comportamiento_anterior_se_mantiene(conn: sqlite3.Connection) -> None:
+    values = _value(_scan(conn, _settings(sizing_strategy="kelly")))
+    for o in (o for o in values if o.stake):
+        assert o.stake == pytest.approx(kelly_stake(1000.0, o.p_final, o.quote.price), abs=0.005)
+        assert "de Kelly" in o.reasons[-1]
+
+
+def test_con_flat_una_cuota_de_16_75_recibe_stake_si_max_odds_la_admite(
+    conn: sqlite3.Connection,
+) -> None:
+    def blocked(max_odds: float) -> str | None:
+        service = _service(
+            conn,
+            TheOddsApiProvider(OfflineFetcher(FIXTURES)),
+            Settings(_env_file=None, ODDS_API_KEY=KEY, sizing_strategy="flat", max_odds=max_odds),
+        )
+        quote = make_quote(price=16.75)
+        return service._blocked(make_opportunity(quote=quote), loss_hit=False, open_events={})
+
+    assert blocked(20.0) is None  # con flat, la cuota larga no se descarta por Kelly
+    assert blocked(10.0) == "cuota 16.75 por encima de max_odds 10 (sesgo favorito-longshot)"
+
+
+def test_con_flat_el_limite_diario_de_exposicion_se_respeta(conn: sqlite3.Connection) -> None:
+    # los dos partidos con stake son de días distintos (25/10 y 26/10): cada día tiene su tope
+    staked = [o.stake for o in _value(_scan(conn, _flat(max_daily_exposure=0.5))) if o.stake]
+    assert staked == [0.5, 0.5]  # el stake de 1 € se recorta al hueco del día
+    conn2 = connect(MEMORY)
+    sin_hueco = _value(_scan(conn2, _flat(max_daily_exposure=0.4)))  # hueco < mínimo de 0,50 €
+    assert all(o.stake == 0.0 for o in sin_hueco)
+    conn2.close()
+
+
+def test_con_flat_la_perdida_diaria_en_euros_apaga_las_recomendaciones(
+    conn: sqlite3.Connection,
+) -> None:
+    _scan(conn, _flat())
+    pick_id = conn.execute("SELECT id FROM picks ORDER BY id LIMIT 1").fetchone()[0]
+    SqliteBankrollRepository(conn, lambda: CAPTURED).settle(pick_id, -10.0)  # max_daily_loss
+    second = _value(_scan(conn, _flat()))
+    assert second and all(o.stake == 0.0 and EXTRA_LOSS in o.reasons[-1] for o in second)

@@ -7,7 +7,7 @@ Backup de la base de datos: no se hace en la Fase 1; se decide en la Fase 3.
 
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
@@ -63,14 +63,22 @@ class Settings(BaseSettings):
     max_quote_age_minutes: PositiveInt = 10
     max_reference_age_minutes: PositiveInt = 10
     timezone: str = "Europe/Madrid"
-    # Fase 3 (ADR 012): bankroll de papel, Kelly y límites
+    # Fase 3 (ADR 012): bankroll de papel, sizing y límites
+    sizing_strategy: Literal["flat", "kelly"] = "flat"
+    flat_stake: PositiveFloat = 1.0  # € por apuesta con sizing flat
+    max_daily_exposure: PositiveFloat = (
+        5.0  # € por día de partido (solo flat; kelly usa daily_exposure)
+    )
+    max_daily_loss: PositiveFloat = (
+        10.0  # € de pérdida diaria (solo flat; kelly usa daily_loss_limit)
+    )
     bankroll_initial: PositiveFloat = 100.0
     kelly_fraction: float = Field(default=0.25, gt=0, le=1)
     max_stake: float = Field(default=0.02, gt=0, le=1)  # por apuesta, fracción del bankroll
     daily_exposure: float = Field(default=0.10, gt=0, le=1)
     daily_loss_limit: float = Field(default=0.05, gt=0, le=1)  # provisional
     # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado
-    max_odds: float = Field(default=5.0, gt=1)
+    max_odds: float = Field(default=10.0, gt=1)
     min_odds: float = Field(default=1.5, gt=1)
     min_stake: float = Field(default=0.005, ge=0, lt=1)  # fracción del bankroll: 0,50 € con 100 €
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio

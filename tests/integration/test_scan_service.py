@@ -47,6 +47,7 @@ def _settings(**overrides: object) -> Settings:
         "ODDS_API_KEY": KEY,
         # los casos a mano de estos tests parten de 1 000 y cuotas ≤ 10; los valores por defecto
         # (100, mínimo 1 %, max_odds 5) se comprueban aparte en test_scan_stakes.py
+        "sizing_strategy": "kelly",
         "bankroll_initial": 1000.0,
         "min_stake": 0.0025,
         "max_odds": 10.0,

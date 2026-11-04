@@ -309,8 +309,9 @@ class ScanService:
         return ALREADY_OPEN if o.event.id in open_events else None
 
     def _assign_stakes(self, result: ScanResult, now: datetime) -> None:
-        """Kelly de 1/4 con topes a los VALUE (ADR 012): un pick por evento, exposición diaria que
-        cuenta los picks abiertos y límite de pérdida diaria. Los demás VALUE quedan en 0."""
+        """Stake a los VALUE (ADR 012): flat de `flat_stake` o Kelly de 1/4 con topes; un pick por
+        evento, exposición diaria que cuenta los picks abiertos y límite de pérdida diaria. Los
+        demás VALUE quedan en 0."""
         s = self._settings
         values = [p for p in result.picks if p.opportunity.label is Label.VALUE]
         if not values:
@@ -319,7 +320,11 @@ class ScanService:
         bank = self._bankroll.balance()
         tz = ZoneInfo(s.timezone)
         pnl = self._bankroll.pnl_between(*_day_bounds(now.astimezone(tz).date(), tz))
-        loss_hit = loss_limit_reached(pnl, bankroll=bank, limit=s.daily_loss_limit)
+        flat = s.sizing_strategy == "flat"
+        # los límites flat son importes en €; `allocate_daily` y `loss_limit_reached` piden fracción
+        daily_cap = (s.max_daily_exposure / bank if bank > 0 else 0.0) if flat else s.daily_exposure
+        loss_limit = (s.max_daily_loss / bank if bank > 0 else 0.0) if flat else s.daily_loss_limit
+        loss_hit = loss_limit_reached(pnl, bankroll=bank, limit=loss_limit)
         open_events = self._tracking.stake_by_open_event()
         best: dict[str, Pick] = {}
         for pick in values:
@@ -338,8 +343,12 @@ class ScanService:
             elif best[o.event.id] is not pick:
                 decided[pick.quote_id] = (0.0, ONE_PER_EVENT)
             else:
-                raw = kelly_stake(
-                    bank, o.p_final, o.quote.price, fraction=s.kelly_fraction, cap=s.max_stake
+                raw = (
+                    s.flat_stake
+                    if flat
+                    else kelly_stake(
+                        bank, o.p_final, o.quote.price, fraction=s.kelly_fraction, cap=s.max_stake
+                    )
                 )
                 if raw < s.min_stake * bank - LIMIT_TOL:
                     decided[pick.quote_id] = (
@@ -354,17 +363,18 @@ class ScanService:
             allocation = allocate_daily(
                 candidates,
                 bankroll=bank,
-                daily_cap=s.daily_exposure,
+                daily_cap=daily_cap,
                 min_stake=s.min_stake,
                 already=self._tracking.exposure(*_day_bounds(day, tz)),
             )
             for key, stake in allocation.items():
-                reason = (
-                    f"stake {stake:.2f} ({s.kelly_fraction:g} de Kelly, tope {s.max_stake:.0%} "
-                    f"por apuesta y {s.daily_exposure:.0%} diario)"
-                    if stake > 0
-                    else NO_ROOM
+                sizing = (
+                    f"flat, {s.max_daily_exposure:g} € diarios"
+                    if flat
+                    else f"{s.kelly_fraction:g} de Kelly, tope {s.max_stake:.0%} "
+                    f"por apuesta y {s.daily_exposure:.0%} diario"
                 )
+                reason = f"stake {stake:.2f} ({sizing})" if stake > 0 else NO_ROOM
                 decided[int(key)] = (stake, reason)
         updated: dict[int, Opportunity] = {}
         for pick in values:
