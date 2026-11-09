@@ -26,15 +26,17 @@ from tipster.models.evaluation import brier, log_loss, outcome_index, paired_dif
 from tipster.models.report import build_validation, evaluate_league
 from tipster.models.selection import select_blend
 from tipster.models.tuning import grid_search, predict_matches
+from tipster.notifications.telegram import send_message
 from tipster.providers.base import OddsProvider
 from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
 from tipster.providers.the_odds_api.client import BASE_URL, TheOddsApiProvider
 from tipster.providers.the_odds_api.offline import OfflineFetcher
 from tipster.services.close import CloseService
+from tipster.services.notify import picks_text, settled_text
 from tipster.services.scan import ScanService
 from tipster.services.settle import SettleService
-from tipster.services.status import MIN_SAMPLE, paper_status
+from tipster.services.status import paper_status, status_lines
 from tipster.storage.db import MEMORY, connect
 from tipster.storage.sqlite import (
     SqliteEventRepository,
@@ -549,35 +551,58 @@ def status_command(
         st = paper_status(conn)
     finally:
         conn.close()
-    tz = ZoneInfo(settings.timezone)
-    since = "-" if st.started is None else st.started.astimezone(tz).strftime("%Y-%m-%d")
-    out = console.print
-    out(f"PAPER TRADING desde {since}", markup=False)
-    out(f"Bankroll:   {st.balance:9.2f} €", markup=False)
-    out(
-        f"  depósitos {st.deposits:.2f} · retiros {st.withdrawals:.2f} · "
-        f"profit acumulado {st.profit:+.2f}",
-        markup=False,
-    )
-    out(
-        f"Abiertos:   {st.open_picks} picks con stake · exposición {st.open_exposure:.2f} €",
-        markup=False,
-    )
-    out(
-        f"Liquidados: {st.settled} (ganados {st.won} · perdidos {st.lost} · nulos {st.void})",
-        markup=False,
-    )
-    roi = "-" if st.roi is None else f"{st.roi:+.1%} sobre {st.staked_settled:.2f} € apostados"
-    out(f"ROI:        {roi}", markup=False)
-    if st.settled < MIN_SAMPLE:
-        out(
-            f"  Muestra insuficiente: {st.settled} < {MIN_SAMPLE} picks; el ROI aún no dice nada.",
-            markup=False,
+    for line in status_lines(st, ZoneInfo(settings.timezone)):
+        console.print(line, markup=False)
+
+
+@app.command("notify")
+def notify_command(
+    picks: Annotated[bool, typer.Option("--picks", help="Picks del último scan.")] = False,
+    settle: Annotated[bool, typer.Option("--settle", help="Liquidados hoy.")] = False,
+    status: Annotated[bool, typer.Option("--status", help="Resumen del bankroll.")] = False,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Envía por Telegram los picks, las liquidaciones o el estado (solo notificaciones)."""
+    console = Console()
+    if not (picks or settle or status):
+        console.print("[bold red]Indica qué enviar:[/] --picks, --settle o --status.")
+        raise typer.Exit(EXIT_CONFIG)
+    settings = _settings(console, None, None)
+    if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
+        console.print(
+            "[bold red]Telegram sin configurar:[/] define TELEGRAM_BOT_TOKEN y TELEGRAM_CHAT_ID "
+            "en .env (ver .env.example)."
         )
-    if st.clv.mean is None:
-        out("CLV medio:  sin datos de cierre fiable todavía", markup=False)
-    else:
-        out(f"CLV medio:  {st.clv.mean * 100:+.2f} % en {st.clv.n} picks", markup=False)
+        raise typer.Exit(EXIT_CONFIG)
+    tz = ZoneInfo(settings.timezone)
+    conn = connect(db or settings.db_path)
+    try:
+        bankroll = SqliteBankrollRepository(conn, _now)
+        bankroll.ensure_initial(settings.bankroll_initial)
+        texts: list[str | None] = []
+        if picks:
+            texts.append(picks_text(conn, tz))
+        if settle:
+            texts.append(settled_text(conn, tz, _now(), bankroll.balance()))
+        if status:
+            texts.append("\n".join(status_lines(paper_status(conn), tz)))
+    finally:
+        conn.close()
+    failed = False
+    for text in texts:
+        if text is None:
+            console.print("Nada que enviar.", markup=False)
+        elif send_message(
+            text,
+            token=settings.telegram_bot_token.get_secret_value(),
+            chat_id=settings.telegram_chat_id,
+        ):
+            console.print("Mensaje enviado.", markup=False)
+        else:
+            failed = True
+            console.print("No se pudo enviar el mensaje a Telegram (ver aviso).", markup=False)
+    if failed:
+        raise typer.Exit(EXIT_RUN_ERROR)
 
 
 @app.command("clv")

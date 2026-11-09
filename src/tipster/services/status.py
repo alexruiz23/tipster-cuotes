@@ -3,6 +3,7 @@
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from tipster.storage.db import from_iso
 from tipster.storage.tracking import SqliteTrackingRepository
@@ -67,3 +68,26 @@ def paper_status(conn: sqlite3.Connection) -> PaperStatus:
         staked_settled=staked,
         clv=summarize_clv(SqliteTrackingRepository(conn).clv_values()),
     )
+
+
+def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
+    since = "-" if st.started is None else st.started.astimezone(tz).strftime("%Y-%m-%d")
+    roi = "-" if st.roi is None else f"{st.roi:+.1%} sobre {st.staked_settled:.2f} € apostados"
+    lines = [
+        f"PAPER TRADING desde {since}",
+        f"Bankroll:   {st.balance:9.2f} €",
+        f"  depósitos {st.deposits:.2f} · retiros {st.withdrawals:.2f} · "
+        f"profit acumulado {st.profit:+.2f}",
+        f"Abiertos:   {st.open_picks} picks con stake · exposición {st.open_exposure:.2f} €",
+        f"Liquidados: {st.settled} (ganados {st.won} · perdidos {st.lost} · nulos {st.void})",
+        f"ROI:        {roi}",
+    ]
+    if st.settled < MIN_SAMPLE:
+        lines.append(
+            f"  Muestra insuficiente: {st.settled} < {MIN_SAMPLE} picks; el ROI aún no dice nada."
+        )
+    if st.clv.mean is None:
+        lines.append("CLV medio:  sin datos de cierre fiable todavía")
+    else:
+        lines.append(f"CLV medio:  {st.clv.mean * 100:+.2f} % en {st.clv.n} picks")
+    return lines
