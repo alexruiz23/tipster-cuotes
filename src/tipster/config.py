@@ -44,7 +44,8 @@ class Settings(BaseSettings):
     cache_ttl_seconds: NonNegativeInt = 60
     max_credits_per_run: NonNegativeInt = 30
     min_request_interval_s: NonNegativeFloat = 1.0
-    competitions: CommaList = tuple(COMPETITIONS)
+    # segunda excluida del paper trading (ADR 012, BACKLOG 37): sin cierre fiable de Pinnacle
+    competitions: CommaList = tuple(c for c in COMPETITIONS if c != "segunda")
     markets: CommaList = ("1x2", "ou_2.5")
     bookmakers: CommaList = (
         "pinnacle",

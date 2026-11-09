@@ -26,7 +26,8 @@ def _clean_env(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_valores_por_defecto(monkeypatch: pytest.MonkeyPatch) -> None:
     s = _settings(monkeypatch)
     assert s.odds_api_key is None
-    assert len(s.competitions) == 7
+    assert len(s.competitions) == 6
+    assert "segunda" not in s.competitions
     assert s.markets == ("1x2", "ou_2.5")
     assert s.reference_order == ("pinnacle", "betfair_ex_no_es")
     assert s.devig_method is DevigMethod.MULTIPLICATIVE

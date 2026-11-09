@@ -394,3 +394,7 @@ El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de
 - **Limitación:** el programa no lo impide; es una recomendación. Un retiro hace bajar el stake de los picks siguientes, pero no cambia los ya recomendados y abiertos.
 - **Cómo se aplica el tope diario (`allocate_daily`):** el tope es por **día de partido** (zona Europe/Madrid), no por scan; los 6 picks del scan offline eran de tres días (2, 3 y 1), por eso sumaban 6 €. Dentro de un día, los picks se ordenan por EV decreciente y se asigna el stake de cada uno; el que no cabe se **recorta al hueco que queda** y, si ese hueco es menor que el stake mínimo (0,5 % del bankroll), se **descarta (stake 0)**. La exposición ya abierta ese día cuenta. No se redondea para «llenar» el tope.
 
+
+## Segunda División excluida del paper trading (09/11/2026)
+
+Segunda División excluida del paper trading hasta que se verifique una fuente de cierre fiable (Pinnacle no cubre el cierre en esta liga). Evidencia: en Las Palmas – Eldense (8/11) `close` no encontró cuota de Pinnacle en tres intentos (17:16, 17:21 y 17:26 UTC), así que el pick no tiene CLV; además `/scores` no devolvió ese partido. `segunda` sale de `settings.competitions` por defecto (queda en el registro y puede reactivarse con `TIPSTER_COMPETITIONS`). Ver BACKLOG nº 37.
