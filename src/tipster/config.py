@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     )
 
     odds_api_key: SecretStr | None = Field(default=None, validation_alias="ODDS_API_KEY")
+    telegram_bot_token: SecretStr | None = Field(
+        default=None, validation_alias="TELEGRAM_BOT_TOKEN"
+    )
+    telegram_chat_id: str | None = Field(default=None, validation_alias="TELEGRAM_CHAT_ID")
     db_path: Path = Path("data/tipster.sqlite")
     raw_dir: Path = Path("data/raw")
     cache_ttl_seconds: NonNegativeInt = 60
@@ -147,4 +151,6 @@ class Settings(BaseSettings):
 
     def snapshot(self) -> dict[str, object]:
         """Configuración usada en una ejecución, para guardarla en `runs`. Nunca lleva la clave."""
-        return self.model_dump(mode="json", exclude={"odds_api_key"})
+        return self.model_dump(
+            mode="json", exclude={"odds_api_key", "telegram_bot_token", "telegram_chat_id"}
+        )
