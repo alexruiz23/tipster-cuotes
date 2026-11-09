@@ -10,3 +10,5 @@ mkdir -p data/logs
   echo "== $(date -u +%FT%TZ) scan"
   PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python" -m tipster scan
 } >>data/logs/scan.log 2>&1
+# Aviso por Telegram: opcional, nunca hace fallar el cron (sin token solo deja un aviso en el log)
+PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python" -m tipster notify --picks >>data/logs/notify.log 2>&1 || true

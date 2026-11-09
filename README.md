@@ -22,6 +22,8 @@ picks reales en papel.
 
 **Paper trading desde el 2026-11-04.** `tipster status` muestra de un vistazo el bankroll, los picks abiertos, los liquidados, el ROI (con aviso de «muestra insuficiente» por debajo de 50 picks) y el CLV medio.
 
+**Notificaciones por Telegram (opcionales, solo salientes).** Define `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en `.env` y usa `tipster notify --picks | --settle | --status`. `scripts/scan.sh` y `scripts/settle.sh` lo llaman al terminar (el resultado va a `data/logs/notify.log`); si Telegram falla o no está configurado, el cron no se ve afectado. `settle` solo avisa si hubo picks con stake liquidados ese día.
+
 **Fase 3 cerrada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`, `clv`):
 implementada y validada con datos pasados (`w = 1`; el cierre de Pinnacle se mantiene bien calibrado en
 2024/25, [ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)). **Pendiente: paper trading en

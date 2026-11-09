@@ -20,3 +20,5 @@ mkdir -p data/logs
   echo "== $(date -u +%FT%TZ) settle ($todo picks por liquidar)"
   PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python" -m tipster settle
 } >>data/logs/settle.log 2>&1
+# Aviso por Telegram: opcional, nunca hace fallar el cron
+PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python" -m tipster notify --settle >>data/logs/notify.log 2>&1 || true
