@@ -2,14 +2,15 @@
 
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
-from tipster.storage.db import from_iso
+from tipster.storage.db import from_iso, iso
 from tipster.storage.tracking import SqliteTrackingRepository
 from tipster.tracking.clv import ClvSummary, summarize_clv
 
 MIN_SAMPLE = 50  # picks liquidados con stake para que el ROI diga algo
+MIN_CLV_SAMPLE = 30  # picks con CLV para que su media y su error típico digan algo
 
 
 @dataclass(frozen=True)
@@ -24,8 +25,9 @@ class PaperStatus:
     won: int
     lost: int
     void: int
-    staked_settled: float
+    staked_settled: float  # sin los nulos: su stake se devuelve
     clv: ClvSummary
+    clv_eligible: int = 0  # picks con stake cuyo partido ya empezó (los que deberían tener cierre)
 
     @property
     def settled(self) -> int:
@@ -36,7 +38,9 @@ class PaperStatus:
         return self.profit / self.staked_settled if self.staked_settled > 0 else None
 
 
-def paper_status(conn: sqlite3.Connection) -> PaperStatus:
+def paper_status(conn: sqlite3.Connection, now: datetime | None = None) -> PaperStatus:
+    now = now or datetime.now(UTC)
+
     def one(sql: str) -> tuple[float, ...]:
         return tuple(float(v or 0) for v in conn.execute(sql).fetchone())
 
@@ -52,8 +56,15 @@ def paper_status(conn: sqlite3.Connection) -> PaperStatus:
     )
     won, lost, void, staked = one(
         "SELECT SUM(status = 'ganado'), SUM(status = 'perdido'), SUM(status = 'nulo'),"
-        " SUM(stake) FROM picks WHERE status != 'abierto' AND stake > 0"
+        " SUM(CASE WHEN status != 'nulo' THEN stake END)"
+        " FROM picks WHERE status != 'abierto' AND stake > 0"
     )
+    eligible = conn.execute(
+        "SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id"
+        " JOIN events e ON e.id = q.event_id WHERE p.stake > 0 AND p.status != 'nulo'"
+        " AND julianday(e.kickoff_utc) <= julianday(?)",
+        (iso(now),),
+    ).fetchone()[0]
     return PaperStatus(
         started=None if first is None else from_iso(first),
         balance=balance,
@@ -67,6 +78,7 @@ def paper_status(conn: sqlite3.Connection) -> PaperStatus:
         void=int(void),
         staked_settled=staked,
         clv=summarize_clv(SqliteTrackingRepository(conn).clv_values()),
+        clv_eligible=int(eligible),
     )
 
 
@@ -89,5 +101,20 @@ def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
     if st.clv.mean is None:
         lines.append("CLV medio:  sin datos de cierre fiable todavía")
     else:
-        lines.append(f"CLV medio:  {st.clv.mean * 100:+.2f} % en {st.clv.n} picks")
+        err = "" if st.clv.stderr is None else f" ± {st.clv.stderr * 100:.2f}"
+        positive = "" if st.clv.share_positive is None else f" · {st.clv.share_positive:.0%} > 0"
+        lines.append(
+            f"CLV medio:  {st.clv.mean * 100:+.2f} %{err} (error típico) en {st.clv.n} picks"
+            f"{positive}"
+        )
+        if st.clv.n < MIN_CLV_SAMPLE:
+            lines.append(
+                f"  Muestra insuficiente: {st.clv.n} < {MIN_CLV_SAMPLE} picks con CLV; "
+                "la media aún no dice nada."
+            )
+    if st.clv_eligible:
+        lines.append(
+            f"Cobertura CLV: {st.clv.n} de {st.clv_eligible} picks con stake ya jugados"
+            f" ({st.clv.n / st.clv_eligible:.0%})"
+        )
     return lines

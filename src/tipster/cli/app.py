@@ -32,8 +32,17 @@ from tipster.providers.budget import CreditBudget
 from tipster.providers.http import HttpClient, HttpPolicy
 from tipster.providers.the_odds_api.client import BASE_URL, TheOddsApiProvider
 from tipster.providers.the_odds_api.offline import OfflineFetcher
+from tipster.services.backup import BackupError, backup_database
 from tipster.services.close import CloseService
-from tipster.services.notify import picks_text, settled_text
+from tipster.services.notify import (
+    Alert,
+    alerts,
+    alerts_text,
+    mark_sent,
+    picks_text,
+    settled_text,
+    unsent,
+)
 from tipster.services.scan import ScanService
 from tipster.services.settle import SettleService
 from tipster.services.status import paper_status, status_lines
@@ -441,6 +450,10 @@ def settle_command(
         list[str] | None,
         typer.Option("--result", help="Resultado a mano: EVENTO=GL-GV (repetible)."),
     ] = None,
+    void: Annotated[
+        list[str] | None,
+        typer.Option("--void", help="Anula el pick de un partido aplazado: EVENTO (repetible)."),
+    ] = None,
     db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
 ) -> None:
     """Liquida los picks abiertos con los resultados del proveedor y/o los dados a mano."""
@@ -464,7 +477,7 @@ def settle_command(
             bankroll=bankroll,
             runs=SqliteRunRepository(conn, _now),
             clock=_now,
-        ).run(manual)
+        ).run(manual, void=set(void or ()))
         balance = bankroll.balance()
     finally:
         conn.close()
@@ -548,7 +561,7 @@ def status_command(
     conn = connect(db or settings.db_path)
     try:
         SqliteBankrollRepository(conn, _now).ensure_initial(settings.bankroll_initial)
-        st = paper_status(conn)
+        st = paper_status(conn, _now())
     finally:
         conn.close()
     for line in status_lines(st, ZoneInfo(settings.timezone)):
@@ -560,12 +573,18 @@ def notify_command(
     picks: Annotated[bool, typer.Option("--picks", help="Picks del último scan.")] = False,
     settle: Annotated[bool, typer.Option("--settle", help="Liquidados hoy.")] = False,
     status: Annotated[bool, typer.Option("--status", help="Resumen del bankroll.")] = False,
+    alert: Annotated[
+        bool,
+        typer.Option(
+            "--alerts", help="Fallos nuevos: cierres perdidos, errores, scan parado, créditos."
+        ),
+    ] = False,
     db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
 ) -> None:
     """Envía por Telegram los picks, las liquidaciones o el estado (solo notificaciones)."""
     console = Console()
-    if not (picks or settle or status):
-        console.print("[bold red]Indica qué enviar:[/] --picks, --settle o --status.")
+    if not (picks or settle or status or alert):
+        console.print("[bold red]Indica qué enviar:[/] --picks, --settle, --status o --alerts.")
         raise typer.Exit(EXIT_CONFIG)
     settings = _settings(console, None, None)
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
@@ -579,17 +598,21 @@ def notify_command(
     try:
         bankroll = SqliteBankrollRepository(conn, _now)
         bankroll.ensure_initial(settings.bankroll_initial)
-        texts: list[str | None] = []
+        # (texto, avisos que se marcan como enviados si el mensaje sale bien)
+        texts: list[tuple[str | None, list[Alert]]] = []
         if picks:
-            texts.append(picks_text(conn, tz))
+            texts.append((picks_text(conn, tz), []))
         if settle:
-            texts.append(settled_text(conn, tz, _now(), bankroll.balance()))
+            texts.append((settled_text(conn, tz, _now(), bankroll.balance()), []))
         if status:
-            texts.append("\n".join(status_lines(paper_status(conn), tz)))
+            texts.append(("\n".join(status_lines(paper_status(conn, _now()), tz)), []))
+        if alert:
+            fresh = unsent(conn, alerts(conn, tz, _now(), low_credits=settings.low_credits_alert))
+            texts.append((alerts_text(fresh) if fresh else None, fresh))
     finally:
         conn.close()
     failed = False
-    for text in texts:
+    for text, sent_alerts in texts:
         if text is None:
             console.print("Nada que enviar.", markup=False)
         elif send_message(
@@ -598,11 +621,45 @@ def notify_command(
             chat_id=settings.telegram_chat_id,
         ):
             console.print("Mensaje enviado.", markup=False)
+            _mark_alerts(db or settings.db_path, sent_alerts)
         else:
             failed = True
             console.print("No se pudo enviar el mensaje a Telegram (ver aviso).", markup=False)
     if failed:
         raise typer.Exit(EXIT_RUN_ERROR)
+
+
+def _mark_alerts(path: Path, sent: list[Alert]) -> None:
+    if not sent:
+        return
+    conn = connect(path)
+    try:
+        mark_sent(conn, sent, _now())
+    finally:
+        conn.close()
+
+
+@app.command("backup")
+def backup_command(
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+    dest: Annotated[Path | None, typer.Option("--dest", help="Carpeta de las copias.")] = None,
+    keep: Annotated[int | None, typer.Option("--keep", min=1, help="Copias a conservar.")] = None,
+) -> None:
+    """Copia la base de datos a una carpeta (una copia por día, con rotación)."""
+    console = Console()
+    settings = _settings(console, None, None)
+    try:
+        out = backup_database(
+            db or settings.db_path,
+            dest or settings.backup_dir,
+            now=_now(),
+            tz=ZoneInfo(settings.timezone),
+            keep=keep or settings.backup_keep,
+        )
+    except BackupError as exc:
+        console.print(f"[bold red]Copia fallida:[/] {exc}")
+        raise typer.Exit(EXIT_RUN_ERROR) from exc
+    console.print(f"Copia guardada: {out}", markup=False)
 
 
 @app.command("clv")

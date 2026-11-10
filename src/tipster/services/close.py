@@ -1,9 +1,11 @@
 """Captura del cierre de Pinnacle de los picks abiertos y cálculo del CLV (ADR 012).
 
-Nunca se inventa una cuota: sin cuota de Pinnacle no hay cierre, y un cierre dudoso se guarda como
-no fiable y no entra en el CLV. Un cierre es fiable si se capturó dentro de la ventana previa al
-inicio; el `last_update` se guarda pero no decide (es una marca de la captura, ADR 012). Si el
-precio de Pinnacle no se mueve en la ventana, esa es su cuota de cierre.
+Mientras la última captura esté a más de `closing_refresh_minutes` del inicio se vuelve a
+capturar (el cierre guardado es el más cercano al inicio); si la repetición no encuentra cuota, se
+conserva la anterior. Nunca se inventa una cuota: sin cuota de Pinnacle no hay cierre, y un cierre
+dudoso se guarda como no fiable y no entra en el CLV. Un cierre es fiable si se capturó dentro de
+la ventana previa al inicio; el `last_update` se guarda pero no decide (es una marca de la
+captura, ADR 012). Si el precio de Pinnacle no se mueve en la ventana, esa es su cuota de cierre.
 """
 
 from collections import defaultdict
@@ -60,10 +62,15 @@ class CloseService:
         s = self._settings
         result = CloseResult(run_id=self._runs.start("close", s.snapshot()))
         window = timedelta(minutes=s.closing_window_minutes)
+        refresh = timedelta(minutes=s.closing_refresh_minutes)
         due = [
             p
             for p in self._tracking.open_picks()
-            if p.stake and not p.has_closing and timedelta(0) <= p.kickoff - now <= window
+            if p.stake
+            and timedelta(0) <= p.kickoff - now <= window
+            # sin cierre aún, o cierre guardado a más de `refresh` del inicio: se repite para
+            # quedarse con el más cercano al inicio
+            and (p.closing_captured_at is None or p.kickoff - p.closing_captured_at > refresh)
         ]
         by_competition: dict[str, list[OpenPick]] = defaultdict(list)
         for pick in due:

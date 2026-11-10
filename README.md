@@ -24,6 +24,8 @@ picks reales en papel.
 
 **Notificaciones por Telegram (opcionales, solo salientes; implementadas y probadas con envío real).** Define `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en `.env` y usa `tipster notify --picks | --settle | --status`. `scripts/scan.sh` y `scripts/settle.sh` lo llaman al terminar (el resultado va a `data/logs/notify.log`); si Telegram falla o no está configurado, el cron no se ve afectado. `settle` solo avisa si hubo picks con stake liquidados ese día.
 
+**Copias, avisos de fallos y cierre más cercano.** `tipster backup` copia la base a `data/backups/` (una copia por día, se conservan 14; `settle.sh` y `scan.sh` la lanzan solos). `tipster notify --alerts` avisa por Telegram, una sola vez cada uno, de: picks con stake que empezaron sin cierre fiable (CLV perdido), `scan`/`close`/`settle` terminados en error, scan sin correr en más de 8 días y menos de `TIPSTER_LOW_CREDITS_ALERT` (60) créditos. `close` repite la captura mientras la última esté a más de `TIPSTER_CLOSING_REFRESH_MINUTES` (5) del inicio, así que el cierre guardado queda a 0–5 min. `tipster settle --void EVENTO` anula el pick de un partido aplazado (stake devuelto, bankroll sin mover, fuera del ROI). `tipster status` muestra el CLV con su error típico, el % de picks con CLV > 0 y la cobertura (picks con CLV sobre picks con stake ya jugados).
+
 **Fase 3 cerrada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`, `clv`):
 implementada y validada con datos pasados (`w = 1`; el cierre de Pinnacle se mantiene bien calibrado en
 2024/25, [ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)). **Pendiente: paper trading en
@@ -87,6 +89,8 @@ uv run tipster evaluate            # Dixon-Coles y Elo frente a Pinnacle (walk-f
 uv run tipster select-blend        # diagnóstico: devig, calibrador y mezcla en validación (siempre da w = 1 hoy; no toca 2024/25)
 uv run tipster close               # cierre de Pinnacle de los picks con stake a punto de empezar
 uv run tipster settle              # liquida con los resultados del proveedor (o --result EVENTO=GL-GV)
+uv run tipster settle --void EVENTO  # anula el pick de un partido aplazado (nulo; stake devuelto)
+uv run tipster backup              # copia diaria de la base a data/backups/ (rotación de 14)
 uv run tipster clv                 # CLV de los picks con cierre fiable
 ```
 
@@ -114,7 +118,7 @@ Códigos de salida: 0 (ejecución completa o parcial), 1 (error del proveedor), 
 - **Respuestas crudas:** `data/raw/`, sin la clave.
 - **Logs y métricas:** en la Fase 1 solo se escribe a stdout; el consumo queda en las tablas
   `runs` y `provider_requests`.
-- **Backup:** no se hace en la Fase 1; se decidirá en la Fase 3.
+- **Backup:** `tipster backup` (BACKLOG 40): copia consistente con la API de SQLite, comprobada con `integrity_check`, una por día en `data/backups/` (`TIPSTER_BACKUP_DIR`, `TIPSTER_BACKUP_KEEP`). Los scripts de cron la hacen antes de `scan` y de `settle`. La carpeta está dentro de `data/` (fuera de git) y en el mismo disco: no protege de perder el Mac; para eso, copia esa carpeta a otro sitio (iCloud, disco externo).
 
 ## Desarrollo
 

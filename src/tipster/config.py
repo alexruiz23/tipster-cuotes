@@ -86,6 +86,13 @@ class Settings(BaseSettings):
     min_odds: float = Field(default=1.5, gt=1)
     min_stake: float = Field(default=0.005, ge=0, lt=1)  # fracción del bankroll: 0,50 € con 100 €
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio
+    # `close` repite la captura mientras la última esté a más de N min del inicio, para que el
+    # cierre guardado sea el más cercano posible. N ≥ closing_window_minutes la desactiva.
+    closing_refresh_minutes: PositiveInt = 5
+    # Copias de la base de datos (`tipster backup`) y avisos (`tipster notify --alerts`)
+    backup_dir: Path = Path("data/backups")
+    backup_keep: PositiveInt = 14  # copias diarias que se conservan
+    low_credits_alert: NonNegativeInt = 60  # avisa si los créditos restantes bajan de este valor
 
     @field_validator("competitions", "markets", "bookmakers", "reference_order", mode="before")
     @classmethod

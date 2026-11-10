@@ -1,5 +1,6 @@
 """`tipster notify`: texto de picks, liquidaciones y estado; envío simulado (sin red)."""
 
+from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -10,7 +11,7 @@ from tests.integration.test_close_settle import NOW, FakeScores, _open, _settle
 from tipster.cli import app as cli
 from tipster.config import Settings
 from tipster.providers.base import MatchScore
-from tipster.services.notify import picks_text, settled_text
+from tipster.services.notify import alerts, alerts_text, mark_sent, picks_text, settled_text, unsent
 from tipster.storage.db import connect
 
 TZ = ZoneInfo("Europe/Madrid")
@@ -122,3 +123,79 @@ def test_el_token_no_se_guarda_en_la_configuracion_de_las_ejecuciones(
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "123")
     snap = Settings(_env_file=None).snapshot()
     assert "SECRETO" not in str(snap) and "123" not in str(snap)
+
+
+def _insert_request(conn, remaining: int) -> None:  # type: ignore[no-untyped-def]
+    run = conn.execute("SELECT MAX(id) FROM runs").fetchone()[0]
+    conn.execute(
+        "INSERT INTO provider_requests (run_id, provider, endpoint, params_key, from_cache,"
+        " credits_remaining, requested_at) VALUES (?, 'the_odds_api', '/x', '', 0, ?, ?)",
+        (run, remaining, NOW.isoformat()),
+    )
+
+
+def test_alerta_de_cierre_perdido_solo_con_stake_y_partido_ya_empezado(db: Path) -> None:
+    conn = connect(db)
+    lost = _open(conn, "pasado", minutes_to_kickoff=-30, stake=2.0)
+    _open(conn, "sin-stake", minutes_to_kickoff=-30, stake=0.0)
+    _open(conn, "futuro", minutes_to_kickoff=600, stake=2.0)
+    _open(conn, "recien", minutes_to_kickoff=-2, stake=2.0)  # aún dentro de la gracia
+    _open(conn, "viejo", minutes_to_kickoff=-60 * 24 * 5, stake=2.0)  # fuera de los 3 días
+    found = [a for a in alerts(conn, TZ, NOW, low_credits=0) if a[0].startswith("sin-clv")]
+    assert [k for k, _ in found] == [f"sin-clv:{lost}"]
+    assert "sin cierre" in found[0][1]
+    ok = _open(conn, "con-cierre", minutes_to_kickoff=-30, stake=2.0)
+    conn.execute("UPDATE picks SET closing_reliable = 1, clv = 0.01 WHERE id = ?", (ok,))
+    again = [k for k, _ in alerts(conn, TZ, NOW, low_credits=0) if k.startswith("sin-clv")]
+    assert again == [f"sin-clv:{lost}"]
+    conn.close()
+
+
+def test_alerta_de_errores_scan_parado_y_creditos(db: Path) -> None:
+    conn = connect(db)
+    conn.execute(
+        "INSERT INTO runs (command, started_at, status, settings_json)"
+        " VALUES ('close', ?, 'error', '{}')",
+        ((NOW - timedelta(hours=3)).isoformat(),),
+    )
+    conn.execute(
+        "UPDATE runs SET started_at = ? WHERE command = 'scan'",
+        ((NOW - timedelta(days=9)).isoformat(),),
+    )
+    _insert_request(conn, remaining=12)
+    keys = [k for k, _ in alerts(conn, TZ, NOW, low_credits=60)]
+    assert any(k.startswith("run:") for k in keys)
+    assert any(k.startswith("scan-parado:") for k in keys)
+    assert "creditos:2026-11" in keys
+    assert [k for k, _ in alerts(conn, TZ, NOW, low_credits=5)].count("creditos:2026-11") == 0
+    conn.close()
+
+
+def test_un_aviso_se_envia_una_sola_vez(db: Path) -> None:
+    conn = connect(db)
+    _open(conn, "pasado", minutes_to_kickoff=-30, stake=2.0)
+    found = alerts(conn, TZ, NOW, low_credits=0)
+    assert unsent(conn, found) == found
+    mark_sent(conn, found, NOW)
+    assert unsent(conn, alerts(conn, TZ, NOW, low_credits=0)) == []
+    assert alerts_text(found).startswith("⚠️ Avisos del tipster")
+    conn.close()
+
+
+def test_notify_alerts_envia_y_marca_solo_si_el_envio_sale_bien(
+    db: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn = connect(db)
+    _open(conn, "pasado", minutes_to_kickoff=-30, stake=2.0)
+    conn.close()
+    monkeypatch.setattr(cli, "_now", lambda: NOW)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "1")
+    fail = _sent(monkeypatch, ok=False)
+    assert CliRunner().invoke(cli.app, ["notify", "--alerts", "--db", str(db)]).exit_code == 1
+    assert len(fail) == 1
+    sent = _sent(monkeypatch)
+    assert CliRunner().invoke(cli.app, ["notify", "--alerts", "--db", str(db)]).exit_code == 0
+    assert len(sent) == 1 and "Sin CLV" in sent[0][0]
+    again = CliRunner().invoke(cli.app, ["notify", "--alerts", "--db", str(db)])
+    assert again.exit_code == 0 and len(sent) == 1 and "Nada que enviar" in again.output

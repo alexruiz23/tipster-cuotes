@@ -9,10 +9,26 @@ cd "$ROOT"
 export PATH="/usr/bin:/bin"
 DB="${TIPSTER_DB_PATH:-data/tipster.sqlite}"
 WINDOW="${TIPSTER_CLOSING_WINDOW_MINUTES:-15}"
+REFRESH="${TIPSTER_CLOSING_REFRESH_MINUTES:-5}"
+
+# Cierres perdidos: pick con stake cuyo partido empezó hace más de 5 min sin CLV y sin avisar. Es una
+# comprobación local (0 créditos); solo si hay alguno se lanza `notify --alerts`.
+missed=$(sqlite3 "$DB" "
+  SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id
+  WHERE p.stake > 0 AND p.status <> 'nulo' AND p.clv IS NULL
+    AND e.kickoff_utc <= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '-5 minutes')
+    AND e.kickoff_utc >= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '-3 days')
+    AND NOT EXISTS (SELECT 1 FROM alerts_sent a WHERE a.key = 'sin-clv:' || p.id)" 2>/dev/null) || missed=0
+if [ "${missed:-0}" -gt 0 ]; then
+  mkdir -p data/logs
+  PYTHONPATH="$ROOT/src" "$ROOT/.venv/bin/python" -m tipster notify --alerts >>data/logs/notify.log 2>&1 || true
+fi
 
 due=$(sqlite3 "$DB" "
   SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id
-  WHERE p.status = 'abierto' AND p.stake > 0 AND p.closing_captured_at IS NULL
+  WHERE p.status = 'abierto' AND p.stake > 0
+    AND (p.closing_captured_at IS NULL
+         OR (julianday(e.kickoff_utc) - julianday(p.closing_captured_at)) * 1440 > $REFRESH)
     AND e.kickoff_utc >= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now')
     AND e.kickoff_utc <= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '+$WINDOW minutes')")
 [ "$due" -gt 0 ] || exit 0

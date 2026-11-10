@@ -92,6 +92,7 @@ class OpenPick:
     price: float
     stake: float | None
     has_closing: bool = False
+    closing_captured_at: datetime | None = None
 
 
 class SqliteTrackingRepository:
@@ -121,7 +122,7 @@ class SqliteTrackingRepository:
         rows = self._conn.execute(
             "SELECT p.id, q.event_id, e.competition_id, e.home_team, e.away_team, e.kickoff_utc,"
             " q.market_id, q.selection, q.price, p.stake,"
-            " p.closing_captured_at IS NOT NULL AS has_closing FROM picks p"
+            " p.closing_captured_at IS NOT NULL AS has_closing, p.closing_captured_at FROM picks p"
             " JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id"
             " WHERE p.status = 'abierto' ORDER BY e.kickoff_utc, p.id"
         ).fetchall()
@@ -138,6 +139,7 @@ class SqliteTrackingRepository:
                 r["price"],
                 r["stake"],
                 bool(r["has_closing"]),
+                None if r["closing_captured_at"] is None else from_iso(r["closing_captured_at"]),
             )
             for r in rows
         ]
@@ -188,7 +190,13 @@ class SqliteTrackingRepository:
         self._conn.commit()
 
     def settle(
-        self, pick_id: int, *, result: str, status: str, profit: float | None, settled_at: datetime
+        self,
+        pick_id: int,
+        *,
+        result: str | None,
+        status: str,
+        profit: float | None,
+        settled_at: datetime,
     ) -> None:
         self._conn.execute(
             "UPDATE picks SET result = ?, status = ?, profit = ?, settled_at = ? WHERE id = ?",

@@ -2,7 +2,7 @@
 
 import math
 from collections import defaultdict
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -47,19 +47,36 @@ class SettleService:
         self._runs = runs
         self._clock = clock
 
-    def run(self, manual: Mapping[str, tuple[int, int]]) -> SettleResult:
+    def run(
+        self, manual: Mapping[str, tuple[int, int]], void: Collection[str] = ()
+    ) -> SettleResult:
+        """Liquida los picks abiertos. `void`: ids de evento a anular (partido aplazado o
+        suspendido): el pick queda `nulo`, el stake se devuelve y el bankroll no se mueve."""
         now = self._clock()
         result = SettleResult(run_id=self._runs.start("settle", {}))
         picks = self._tracking.open_picks()
+        open_events = {p.event_id for p in picks}
+        result.warnings.extend(
+            f"--void {event_id}: no hay ningún pick abierto en ese evento"
+            for event_id in sorted(set(void) - open_events)
+        )
         scores = dict(manual)  # id canónico del evento → (goles local, goles visitante)
         if self._provider is not None:
-            scores.update(self._fetch(picks, set(manual), now, result))
+            scores.update(self._fetch(picks, set(manual) | set(void), now, result))
         for pick in picks:
+            if pick.event_id in void:
+                profit = 0.0 if pick.stake else None
+                self._tracking.settle(
+                    pick.id, result=None, status="nulo", profit=profit, settled_at=now
+                )
+                result.settled.append(Settled(pick.id, "nulo", profit))
+                continue
             if pick.event_id not in scores:
                 if now - pick.kickoff >= FINISHED_AFTER:
                     result.pending.append(
                         f"{pick.home_team} – {pick.away_team} ({pick.market_id} {pick.selection}): "
-                        "sin resultado (usa --result)"
+                        f"sin resultado (usa --result {pick.event_id}=GL-GV "
+                        f"o --void {pick.event_id})"
                     )
                 continue
             home, away = scores[pick.event_id]

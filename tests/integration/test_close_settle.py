@@ -142,7 +142,7 @@ def test_close_ignora_lo_que_no_esta_en_la_ventana_sin_gastar_creditos(
 
 def test_close_salta_picks_sin_stake_o_con_cierre_ya_capturado(conn: sqlite3.Connection) -> None:
     _open(conn, "sin-stake", minutes_to_kickoff=10, stake=None)
-    done = _open(conn, "hecho", minutes_to_kickoff=10)
+    done = _open(conn, "hecho", minutes_to_kickoff=3)  # captura a menos de 5 min del inicio
     provider = FakeOdds(_pinnacle("hecho", (1.80, 3.60, 3.60)))
     assert _close(conn, provider).captured == [done]
     again = FakeOdds(_pinnacle("hecho", (1.50, 4.00, 6.00)))
@@ -198,6 +198,57 @@ def test_close_con_over_under(conn: sqlite3.Connection) -> None:
     provider = FakeOdds(_pinnacle("e1", (1.90, 2.00), market="ou_2.5"))
     assert _close(conn, provider).captured == [pick_id]
     assert provider.requests[0].market_ids == ("ou_2.5",)
+
+
+def test_close_repite_la_captura_si_la_anterior_esta_lejos_del_inicio(
+    conn: sqlite3.Connection,
+) -> None:
+    pick_id = _open(conn, "e1", minutes_to_kickoff=12)
+    first = _pinnacle("e1", (1.80, 3.60, 3.60), captured=NOW - timedelta(minutes=8))  # KO − 20
+    _close(conn, FakeOdds(first))  # fuera de ventana: queda registrada, no fiable
+    conn.execute(
+        "UPDATE events SET kickoff_utc = ? WHERE id = 'e1'",
+        ((NOW + timedelta(minutes=9)).isoformat(),),
+    )
+    near = FakeOdds(_pinnacle("e1", (1.70, 3.80, 4.20), captured=NOW))  # KO − 9: dentro
+    assert _close(conn, near).captured == [pick_id]
+    row = conn.execute("SELECT closing_odds, closing_reliable FROM picks").fetchone()
+    assert tuple(row) == (1.70, 1)
+    assert len(near.requests) == 1
+    # el reloj de los tests es fijo: se simula que la captura anterior fue 5 min antes
+    conn.execute(
+        "UPDATE picks SET closing_captured_at = ?", ((NOW - timedelta(minutes=5)).isoformat(),)
+    )
+    conn.execute(
+        "UPDATE events SET kickoff_utc = ? WHERE id = 'e1'",
+        ((NOW + timedelta(minutes=4)).isoformat(),),
+    )
+    closer = FakeOdds(_pinnacle("e1", (1.60, 4.00, 4.50), captured=NOW))  # KO − 4
+    assert _close(conn, closer).captured == [pick_id]
+    assert conn.execute("SELECT closing_odds FROM picks").fetchone()[0] == 1.60
+    final = FakeOdds(_pinnacle("e1", (1.50, 4.00, 6.00), captured=NOW))
+    assert _close(conn, final).captured == [] and final.requests == []  # ya está a < 5 min
+
+
+def test_una_repeticion_sin_cuota_conserva_el_cierre_anterior(conn: sqlite3.Connection) -> None:
+    pick_id = _open(conn, "e1", minutes_to_kickoff=12)
+    assert _close(conn, FakeOdds(_pinnacle("e1", (1.80, 3.60, 3.60)))).captured == [pick_id]
+    conn.execute(
+        "UPDATE events SET kickoff_utc = ? WHERE id = 'e1'",
+        ((NOW + timedelta(minutes=8)).isoformat(),),
+    )
+    result = _close(conn, FakeOdds([]))
+    assert result.captured == [] and len(result.missing) == 1
+    row = conn.execute("SELECT closing_odds, closing_reliable FROM picks").fetchone()
+    assert tuple(row) == (1.80, 1)
+
+
+def test_con_refresh_igual_a_la_ventana_no_se_repite(conn: sqlite3.Connection) -> None:
+    _open(conn, "e1", minutes_to_kickoff=12)
+    _close(conn, FakeOdds(_pinnacle("e1", (1.80, 3.60, 3.60))), closing_refresh_minutes=15)
+    again = FakeOdds(_pinnacle("e1", (1.50, 4.00, 6.00)))
+    assert _close(conn, again, closing_refresh_minutes=15).captured == []
+    assert again.requests == []
 
 
 # -- settle ------------------------------------------------------------------------------------
@@ -285,3 +336,58 @@ def test_un_pick_sin_stake_se_liquida_sin_mover_el_bankroll(conn: sqlite3.Connec
         bank.balance() == 1000.0
         and conn.execute("SELECT COUNT(*) FROM bankroll_entries").fetchone()[0] == 1
     )
+
+
+def test_void_anula_el_pick_sin_mover_el_bankroll(conn: sqlite3.Connection) -> None:
+    aplazado = _open(conn, "e1", minutes_to_kickoff=-300, stake=2.0)
+    otro = _open(conn, "e2", minutes_to_kickoff=-200)
+    scores = FakeScores([MatchScore("xe2", True, 1, 0)])
+    bank = SqliteBankrollRepository(conn, clock)
+    bank.ensure_initial(1000.0)
+    result = SettleService(
+        provider=scores, tracking=SqliteTrackingRepository(conn), bankroll=bank,
+        runs=SqliteRunRepository(conn, clock), clock=clock,
+    ).run({}, void={"e1"})  # fmt: skip
+    rows = {r["id"]: r for r in conn.execute("SELECT * FROM picks")}
+    assert (rows[aplazado]["status"], rows[aplazado]["profit"], rows[aplazado]["result"]) == (
+        "nulo",
+        0.0,
+        None,
+    )
+    assert rows[otro]["status"] == "ganado"
+    assert {s.status for s in result.settled} == {"nulo", "ganado"}
+    assert scores.calls == [("laliga", 1)]  # el anulado no se consulta a /scores
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) FROM bankroll_entries WHERE pick_id = ?", (aplazado,)
+        ).fetchone()[0]
+        == 0
+    )
+    # una vez anulado ya no cuenta como abierto ni como apostado en el ROI
+    assert SqliteTrackingRepository(conn).stake_by_open_event().get("e1") is None
+
+
+def test_void_de_un_pick_sin_stake_deja_profit_nulo(conn: sqlite3.Connection) -> None:
+    _open(conn, "e1", minutes_to_kickoff=-300, stake=None)
+    _settle_void(conn, {"e1"})
+    assert conn.execute("SELECT status, profit FROM picks").fetchone()[:] == ("nulo", None)
+
+
+def _settle_void(conn: sqlite3.Connection, void: set[str]):  # type: ignore[no-untyped-def]
+    bank = SqliteBankrollRepository(conn, clock)
+    bank.ensure_initial(1000.0)
+    return SettleService(
+        provider=None, tracking=SqliteTrackingRepository(conn), bankroll=bank,
+        runs=SqliteRunRepository(conn, clock), clock=clock,
+    ).run({}, void=void)  # fmt: skip
+
+
+def test_el_pendiente_sugiere_result_o_void_con_el_id_del_evento(conn: sqlite3.Connection) -> None:
+    _open(conn, "e1", minutes_to_kickoff=-300)
+    result, _ = _settle(conn, FakeScores([]))
+    assert "--void e1" in result.pending[0] and "--result e1=GL-GV" in result.pending[0]
+
+
+def test_void_de_un_evento_sin_picks_abiertos_avisa(conn: sqlite3.Connection) -> None:
+    result = _settle_void(conn, {"no-existe"})
+    assert result.settled == [] and "no-existe" in result.warnings[0]
