@@ -81,7 +81,7 @@ class SettleService:
                 continue
             home, away = scores[pick.event_id]
             s = settle_pick(
-                pick.market_id, pick.selection, pick.price, pick.stake,
+                pick.market_id, pick.selection, pick.effective_price, pick.stake,
                 home_goals=home, away_goals=away,
             )  # fmt: skip
             self._tracking.settle(

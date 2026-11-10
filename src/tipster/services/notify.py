@@ -22,7 +22,7 @@ def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
     run = conn.execute("SELECT MAX(id) FROM runs WHERE command = 'scan'").fetchone()[0]
     rows = (
         conn.execute(
-            f"SELECT {_PICK_COLS} {_FROM} WHERE p.run_id = ? AND p.stake > 0 "
+            f"SELECT {_PICK_COLS}, p.id {_FROM} WHERE p.run_id = ? AND p.stake > 0 "
             "AND p.status = 'abierto' ORDER BY e.kickoff_utc, p.ev DESC",
             (run,),
         ).fetchall()
@@ -31,12 +31,12 @@ def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
     )
     if not rows:
         return "Último scan: sin picks con stake."
-    lines = [f"Último scan: {len(rows)} picks con stake"]
-    for home, away, ko, market, sel, book, price, ev, stake, feed_es, _, _ in rows:
+    lines = [f"Último scan: {len(rows)} picks con stake (cuota real: tipster take ID --price X)"]
+    for home, away, ko, market, sel, book, price, ev, stake, feed_es, _, _, pick_id in rows:
         when = from_iso(ko).astimezone(tz).strftime("%d/%m %H:%M")
         warn = "" if feed_es else " · verifica la cuota en la web .es"
         lines.append(
-            f"{home} – {away} ({when})\n  {market} {sel} @ {price:g} en {book} · "
+            f"#{pick_id} {home} – {away} ({when})\n  {market} {sel} @ {price:g} en {book} · "
             f"EV {ev * 100:+.1f} % · stake {stake:.2f} €{warn}"
         )
     return "\n".join(lines)

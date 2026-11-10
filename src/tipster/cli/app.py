@@ -46,7 +46,7 @@ from tipster.services.notify import (
 from tipster.services.scan import ScanService
 from tipster.services.settle import SettleService
 from tipster.services.status import paper_status, status_lines
-from tipster.storage.db import MEMORY, connect
+from tipster.storage.db import MEMORY, connect, from_iso
 from tipster.storage.sqlite import (
     SqliteEventRepository,
     SqliteOddsRepository,
@@ -662,6 +662,73 @@ def backup_command(
     console.print(f"Copia guardada: {out}", markup=False)
 
 
+@app.command("take")
+def take_command(
+    pick_id: Annotated[
+        int | None, typer.Argument(help="Id del pick (sale en `notify --picks`).")
+    ] = None,
+    price: Annotated[
+        float | None, typer.Option("--price", help="Cuota real que ves y tomas en la web .es.")
+    ] = None,
+    bookmaker: Annotated[
+        str | None, typer.Option("--bookmaker", help="Casa donde la tomas (texto libre).")
+    ] = None,
+    list_: Annotated[
+        bool, typer.Option("--list", help="Lista los picks abiertos con stake.")
+    ] = False,
+    db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
+) -> None:
+    """Registra la cuota real de un pick abierto: manda sobre la del feed en la liquidación y
+    en el CLV real (el CLV del feed se conserva para compararlos)."""
+    console = Console()
+    settings = _settings(console, None, None)
+    if not list_ and (pick_id is None or price is None):
+        console.print(
+            "[bold red]Indica el pick y la cuota:[/] tipster take ID --price X (o --list)."
+        )
+        raise typer.Exit(EXIT_CONFIG)
+    conn = connect(db or settings.db_path)
+    try:
+        repo = SqliteTrackingRepository(conn)
+        if list_:
+            tz = ZoneInfo(settings.timezone)
+            for r in repo.stake_picks():
+                when = from_iso(r["kickoff_utc"]).astimezone(tz).strftime("%d/%m %H:%M")
+                real = "" if r["taken_price"] is None else f" · real {r['taken_price']:g}"
+                console.print(
+                    f"#{r['id']} {r['home_team']} – {r['away_team']} ({when}) {r['market_id']} "
+                    f"{r['selection']} @ {r['price']:g} ({r['bookmaker_id']}) · "
+                    f"stake {r['stake']:.2f} €{real}",
+                    markup=False,
+                )
+            return
+        assert pick_id is not None and price is not None
+        if price <= 1:
+            console.print("[bold red]La cuota debe ser mayor que 1.[/]")
+            raise typer.Exit(EXIT_CONFIG)
+        if not repo.set_taken(pick_id, price=price, bookmaker=bookmaker, at=_now()):
+            console.print(
+                f"[bold red]El pick {pick_id} no existe, no está abierto o no tiene stake.[/]"
+            )
+            raise typer.Exit(EXIT_CONFIG)
+        row = conn.execute(
+            "SELECT q.price, p.clv_taken FROM picks p JOIN odds_quotes q ON q.id = p.quote_id"
+            " WHERE p.id = ?",
+            (pick_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    drift = price / row["price"] - 1
+    console.print(
+        f"Pick {pick_id}: cuota real {price:g} (feed {row['price']:g}, {drift:+.1%}).", markup=False
+    )
+    if drift < -0.05:
+        console.print(
+            "  Aviso: la cuota real es mucho peor que la del feed; ¿sigue habiendo valor?",
+            markup=False,
+        )
+
+
 @app.command("clv")
 def clv_command(
     db: Annotated[Path | None, typer.Option("--db", help="Base de datos.")] = None,
@@ -671,7 +738,9 @@ def clv_command(
     settings = _settings(console, None, None)
     conn = connect(db or settings.db_path)
     try:
-        summary = summarize_clv(SqliteTrackingRepository(conn).clv_values())
+        repo = SqliteTrackingRepository(conn)
+        summary = summarize_clv(repo.clv_values())
+        taken = repo.clv_taken_values()
     finally:
         conn.close()
     console.print(f"Picks con CLV: {summary.n}", markup=False)
@@ -689,6 +758,14 @@ def clv_command(
         f"Mediana: {pct(summary.median)} · picks con CLV > 0: {summary.share_positive:.0%}",
         markup=False,
     )
+    if taken:
+        real = summarize_clv([(c, s) for c, _, s in taken])
+        feed_mean = sum(f for _, f, _ in taken) / len(taken)
+        console.print(
+            f"CLV con cuota real: {pct(real.mean)} (error típico {pct(real.stderr)}) en "
+            f"{real.n} picks · el feed daba {pct(feed_mean)} en esos mismos picks",
+            markup=False,
+        )
 
 
 @app.command("select-blend")

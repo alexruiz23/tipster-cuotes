@@ -26,6 +26,8 @@ picks reales en papel.
 
 **Copias, avisos de fallos y cierre más cercano.** `tipster backup` copia la base a `data/backups/` (una copia por día, se conservan 14; `settle.sh` y `scan.sh` la lanzan solos). `tipster notify --alerts` avisa por Telegram, una sola vez cada uno, de: picks con stake que empezaron sin cierre fiable (CLV perdido), `scan`/`close`/`settle` terminados en error, scan sin correr en más de 8 días y menos de `TIPSTER_LOW_CREDITS_ALERT` (60) créditos. `close` repite la captura mientras la última esté a más de `TIPSTER_CLOSING_REFRESH_MINUTES` (5) del inicio, así que el cierre guardado queda a 0–5 min. `tipster settle --void EVENTO` anula el pick de un partido aplazado (stake devuelto, bankroll sin mover, fuera del ROI). `tipster status` muestra el CLV con su error típico, el % de picks con CLV > 0 y la cobertura (picks con CLV sobre picks con stake ya jugados).
 
+**Cuota real de la web .es.** El feed de The Odds API no es la web española de la casa, así que la cuota que ves puede ser otra. `tipster notify --picks` ahora lleva el id de cada pick (`#12`); `tipster take 12 --price 2.05 --bookmaker bwin.es` registra la cuota a la que lo tomas de verdad (`tipster take --list` enseña los abiertos). Si hay cuota real, manda sobre la del feed en la liquidación (profit y bankroll) y en un CLV «real» que `status` y `clv` muestran junto al del feed en los mismos picks. Solo se puede registrar en picks abiertos con stake; sin registrar nada el comportamiento es el de antes, y `status` avisa de cuántos picks tienen cuota real.
+
 **Fase 3 cerrada** (probabilidad final, stake de Kelly, bankroll de papel, `close`, `settle`, `clv`):
 implementada y validada con datos pasados (`w = 1`; el cierre de Pinnacle se mantiene bien calibrado en
 2024/25, [ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)). **Pendiente: paper trading en
@@ -90,6 +92,7 @@ uv run tipster select-blend        # diagnóstico: devig, calibrador y mezcla en
 uv run tipster close               # cierre de Pinnacle de los picks con stake a punto de empezar
 uv run tipster settle              # liquida con los resultados del proveedor (o --result EVENTO=GL-GV)
 uv run tipster settle --void EVENTO  # anula el pick de un partido aplazado (nulo; stake devuelto)
+uv run tipster take ID --price X   # registra la cuota real que ves en la web .es (ID: ver notify --picks o take --list)
 uv run tipster backup              # copia diaria de la base a data/backups/ (rotación de 14)
 uv run tipster clv                 # CLV de los picks con cierre fiable
 ```

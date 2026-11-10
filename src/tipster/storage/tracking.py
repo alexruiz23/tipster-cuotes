@@ -93,6 +93,12 @@ class OpenPick:
     stake: float | None
     has_closing: bool = False
     closing_captured_at: datetime | None = None
+    taken_price: float | None = None  # cuota real registrada con `tipster take`
+
+    @property
+    def effective_price(self) -> float:
+        """La cuota a la que se apostó de verdad: la real si se registró, si no la del feed."""
+        return self.taken_price or self.price
 
 
 class SqliteTrackingRepository:
@@ -122,7 +128,8 @@ class SqliteTrackingRepository:
         rows = self._conn.execute(
             "SELECT p.id, q.event_id, e.competition_id, e.home_team, e.away_team, e.kickoff_utc,"
             " q.market_id, q.selection, q.price, p.stake,"
-            " p.closing_captured_at IS NOT NULL AS has_closing, p.closing_captured_at FROM picks p"
+            " p.closing_captured_at IS NOT NULL AS has_closing, p.closing_captured_at,"
+            " p.taken_price FROM picks p"
             " JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id"
             " WHERE p.status = 'abierto' ORDER BY e.kickoff_utc, p.id"
         ).fetchall()
@@ -140,6 +147,7 @@ class SqliteTrackingRepository:
                 r["stake"],
                 bool(r["has_closing"]),
                 None if r["closing_captured_at"] is None else from_iso(r["closing_captured_at"]),
+                r["taken_price"],
             )
             for r in rows
         ]
@@ -173,10 +181,11 @@ class SqliteTrackingRepository:
         last_update: datetime | None,
         reliable: bool,
         clv: float | None,
+        clv_taken: float | None = None,
     ) -> None:
         self._conn.execute(
             "UPDATE picks SET closing_odds = ?, closing_fair_odds = ?, closing_captured_at = ?,"
-            " closing_last_update = ?, closing_reliable = ?, clv = ? WHERE id = ?",
+            " closing_last_update = ?, closing_reliable = ?, clv = ?, clv_taken = ? WHERE id = ?",
             (
                 closing_odds,
                 closing_fair_odds,
@@ -184,10 +193,43 @@ class SqliteTrackingRepository:
                 None if last_update is None else iso(last_update),
                 int(reliable),
                 clv,
+                clv_taken,
                 pick_id,
             ),
         )
         self._conn.commit()
+
+    def set_taken(self, pick_id: int, *, price: float, bookmaker: str | None, at: datetime) -> bool:
+        """Registra la cuota real de un pick abierto con stake. Si ya hay un cierre fiable calcula
+        el CLV real al momento. Devuelve False si el pick no existe, no está abierto o no tiene
+        stake (no hay nada apostado que registrar)."""
+        cur = self._conn.execute(
+            "UPDATE picks SET taken_price = ?, taken_bookmaker = ?, taken_at = ?,"
+            " clv_taken = CASE WHEN closing_reliable = 1 AND closing_fair_odds IS NOT NULL"
+            " THEN ? / closing_fair_odds - 1 END"
+            " WHERE id = ? AND status = 'abierto' AND stake > 0",
+            (price, bookmaker, iso(at), price, pick_id),
+        )
+        self._conn.commit()
+        return cur.rowcount == 1
+
+    def stake_picks(self) -> list[sqlite3.Row]:
+        """Picks abiertos con stake, para `tipster take --list`."""
+        return self._conn.execute(
+            "SELECT p.id, e.home_team, e.away_team, e.kickoff_utc, q.market_id, q.selection,"
+            " q.bookmaker_id, q.price, p.stake, p.taken_price, p.taken_bookmaker"
+            " FROM picks p JOIN odds_quotes q ON q.id = p.quote_id"
+            " JOIN events e ON e.id = q.event_id"
+            " WHERE p.status = 'abierto' AND p.stake > 0 ORDER BY e.kickoff_utc, p.id"
+        ).fetchall()
+
+    def clv_taken_values(self) -> list[tuple[float, float, float]]:
+        """(CLV real, CLV del feed, stake) de los picks con cuota real y cierre fiable."""
+        rows = self._conn.execute(
+            "SELECT clv_taken, clv, stake FROM picks WHERE closing_reliable = 1"
+            " AND clv_taken IS NOT NULL AND clv IS NOT NULL AND stake > 0 ORDER BY id"
+        ).fetchall()
+        return [(float(r[0]), float(r[1]), float(r[2])) for r in rows]
 
     def settle(
         self,

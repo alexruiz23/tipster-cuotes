@@ -28,6 +28,10 @@ class PaperStatus:
     staked_settled: float  # sin los nulos: su stake se devuelve
     clv: ClvSummary
     clv_eligible: int = 0  # picks con stake cuyo partido ya empezó (los que deberían tener cierre)
+    taken_picks: int = 0  # picks con stake que tienen cuota real registrada
+    stake_picks: int = 0  # picks con stake (no nulos)
+    clv_taken: ClvSummary | None = None  # CLV con la cuota real
+    clv_feed_same: float | None = None  # CLV medio del feed en esos mismos picks
 
     @property
     def settled(self) -> int:
@@ -65,6 +69,14 @@ def paper_status(conn: sqlite3.Connection, now: datetime | None = None) -> Paper
         " AND julianday(e.kickoff_utc) <= julianday(?)",
         (iso(now),),
     ).fetchone()[0]
+    taken = SqliteTrackingRepository(conn).clv_taken_values()
+    taken_picks, stake_picks = (
+        int(v)
+        for v in conn.execute(
+            "SELECT COALESCE(SUM(taken_price IS NOT NULL), 0), COUNT(*) FROM picks"
+            " WHERE stake > 0 AND status != 'nulo'"
+        ).fetchone()
+    )
     return PaperStatus(
         started=None if first is None else from_iso(first),
         balance=balance,
@@ -79,6 +91,10 @@ def paper_status(conn: sqlite3.Connection, now: datetime | None = None) -> Paper
         staked_settled=staked,
         clv=summarize_clv(SqliteTrackingRepository(conn).clv_values()),
         clv_eligible=int(eligible),
+        taken_picks=taken_picks,
+        stake_picks=stake_picks,
+        clv_taken=summarize_clv([(c, s) for c, _, s in taken]) if taken else None,
+        clv_feed_same=sum(f for _, f, _ in taken) / len(taken) if taken else None,
     )
 
 
@@ -112,6 +128,18 @@ def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
                 f"  Muestra insuficiente: {st.clv.n} < {MIN_CLV_SAMPLE} picks con CLV; "
                 "la media aún no dice nada."
             )
+    if st.stake_picks:
+        lines.append(
+            f"Cuota real registrada: {st.taken_picks} de {st.stake_picks} picks con stake"
+            + ("" if st.taken_picks else " (usa `tipster take`: el paper trading usa la del feed)")
+        )
+    if st.clv_taken is not None and st.clv_taken.mean is not None:
+        feed = (
+            "" if st.clv_feed_same is None else f" · el feed daba {st.clv_feed_same * 100:+.2f} %"
+        )
+        lines.append(
+            f"CLV real:   {st.clv_taken.mean * 100:+.2f} % en {st.clv_taken.n} picks{feed}"
+        )
     if st.clv_eligible:
         lines.append(
             f"Cobertura CLV: {st.clv.n} de {st.clv_eligible} picks con stake ya jugados"

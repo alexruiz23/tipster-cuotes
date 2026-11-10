@@ -126,5 +126,8 @@ class CloseService:
             last_update=quote.provider_last_update,
             reliable=reliable,
             clv=clv(pick.price, fair) if reliable else None,
+            clv_taken=(
+                clv(pick.taken_price, fair) if reliable and pick.taken_price is not None else None
+            ),
         )
         (result.captured if reliable else result.unreliable).append(pick.id)
