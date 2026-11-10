@@ -1,6 +1,6 @@
 #!/bin/bash
-# Busca picks nuevos (BACKLOG 32). Pensado para los viernes a las 12:00: ~14 créditos por scan
-# completo; `max_credits_per_run` (30) corta el gasto de una ejecución.
+# Busca picks nuevos (BACKLOG 32). Pensado para los martes y viernes a las 12:00 (el martes cubre la
+# Champions de entre semana): ~14 créditos por scan completo; `max_credits_per_run` (30) corta el gasto de una ejecución.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"

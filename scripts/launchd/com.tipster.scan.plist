@@ -5,8 +5,12 @@
   <key>Label</key><string>com.tipster.scan</string>
   <key>ProgramArguments</key>
   <array><string>/bin/bash</string><string>__ROOT__/scripts/scan.sh</string></array>
-  <!-- viernes (5) a las 12:00 locales -->
-  <key>StartCalendarInterval</key><dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  <!-- martes (2) y viernes (5) a las 12:00 locales: el martes cubre la Champions de entre semana -->
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+  </array>
   <key>StandardErrorPath</key><string>__ROOT__/data/logs/launchd-scan.err</string>
 </dict>
 </plist>
