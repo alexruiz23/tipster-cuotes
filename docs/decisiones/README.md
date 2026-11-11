@@ -18,4 +18,4 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 | [010](010-elo-davidson.md) | Elo con empate (Elo-Davidson) como segundo modelo | Aceptada |
 | [011](011-evaluacion-formal.md) | Evaluación formal con reajuste (walk-forward estricto) y cierre de la Fase 2 | Aceptada |
 | [012](012-fase-3-probabilidad-stake-clv.md) | Fase 3: probabilidad final, Kelly, picks y CLV | Aceptada |
-| [013](013-nube-github-actions-turso.md) | Ejecución en la nube: GitHub Actions + Turso | Propuesta |
+| [013](013-nube-github-actions-r2.md) | Ejecución en la nube: GitHub Actions + SQLite en Cloudflare R2 | Aceptada (sin implementar) |
