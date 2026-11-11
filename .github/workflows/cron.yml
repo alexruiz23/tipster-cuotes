@@ -1,0 +1,108 @@
+# Ejecuta scan, settle y close en la nube (ADR 013). La base SQLite vive en Cloudflare R2: cada disparo
+# la descarga, trabaja y la vuelve a subir. Los cron solo actúan con la variable del repositorio
+# CLOUD_ENABLED=true (interruptor del corte desde el Mac); el disparo manual funciona siempre.
+name: Cron
+
+on:
+  schedule: # UTC; due.sh ajusta a la hora de Madrid, invierno y verano
+    - cron: "0 10-12 * * 2,5" # scan: martes y viernes, espera a las 12:00 de Madrid
+    - cron: "0 3-5 * * *" # settle: ~04:00 de Madrid, tres intentos
+    - cron: "*/5 18-20 * * 1,5" # close: lunes y viernes
+    - cron: "*/5 16-20 * * 2,3" # close: martes y miércoles
+    - cron: "*/5 11-20 * * 6" # close: sábado
+    - cron: "*/5 10-20 * * 0" # close: domingo
+  workflow_dispatch:
+    inputs:
+      accion:
+        description: "Forzar un trabajo (auto = decide solo; status = solo lee y muestra el estado)"
+        type: choice
+        options: [auto, scan, settle, close, status]
+        default: auto
+      bootstrap:
+        description: "Crear la base en R2 si no existe (solo la primera vez)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# Una sola cola: nunca hay dos escribiendo. Solo se guarda un pendiente, pero cada disparo decide
+# por el estado de la base, así que perder uno no pierde trabajo.
+concurrency:
+  group: tipster-db
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    if: github.event_name == 'workflow_dispatch' || vars.CLOUD_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
+      R2_BOOTSTRAP: ${{ inputs.bootstrap && '1' || '0' }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_DEFAULT_REGION: auto
+      AWS_ENDPOINT_URL: https://${{ secrets.R2_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+      AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+      FORCE: ${{ inputs.accion }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Descargar la base de R2
+        run: bash scripts/r2.sh pull
+
+      - name: Qué toca ahora
+        id: due
+        run: |
+          any=0
+          for job in scan settle close; do
+            if bash scripts/due.sh "$job"; then echo "$job=1" >> "$GITHUB_OUTPUT"; any=1; fi
+          done
+          [ "$FORCE" = status ] && any=1
+          echo "any=$any" >> "$GITHUB_OUTPUT"
+
+      # Las dependencias solo se instalan si hay trabajo: un disparo ocioso dura segundos
+      - if: steps.due.outputs.any == '1'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.11.32"
+          python-version: "3.12"
+      - if: steps.due.outputs.any == '1'
+        run: uv sync --locked
+
+      - name: Ejecutar lo que toca
+        if: steps.due.outputs.any == '1'
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DUE_SCAN: ${{ steps.due.outputs.scan }}
+          DUE_SETTLE: ${{ steps.due.outputs.settle }}
+          DUE_CLOSE: ${{ steps.due.outputs.close }}
+        run: |
+          rc=0
+          [ "$DUE_SETTLE" = 1 ] && { bash scripts/settle.sh || rc=$?; }
+          [ "$DUE_CLOSE" = 1 ] && { bash scripts/close.sh || rc=$?; }
+          [ "$DUE_SCAN" = 1 ] && { bash scripts/scan.sh || rc=$?; }
+          [ "$FORCE" = status ] && { PYTHONPATH=src .venv/bin/python -m tipster status || rc=$?; }
+          exit "$rc"
+
+      - name: Subir la base a R2 (aunque el paso anterior fallara)
+        if: always() && steps.due.outputs.any == '1'
+        run: bash scripts/r2.sh push
+
+      - name: Últimas líneas del registro
+        if: failure()
+        run: tail -n 30 data/logs/*.log 2>/dev/null || true
+
+      - name: Avisar por Telegram del fallo
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          curl -sS --max-time 15 "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" \
+            --data-urlencode "text=Tipster: falló el workflow (run ${GITHUB_RUN_ID}). Revisa Actions." >/dev/null || true

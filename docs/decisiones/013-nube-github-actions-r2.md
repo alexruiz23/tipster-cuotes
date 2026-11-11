@@ -1,10 +1,10 @@
 # 013 — Ejecución en la nube: GitHub Actions + SQLite en Cloudflare R2
 
-**Estado:** Aceptada (2026-11-11); diseño listo, sin implementar · **Fecha:** 2026-11-11
+**Estado:** Aceptada e implementada (2026-11-11); el corte desde el Mac está pendiente · **Fecha:** 2026-11-11
 
 Quita la dependencia del Mac: `scan`, `close` y `settle` pasan a ejecutarse en GitHub Actions. La base sigue siendo un
 fichero SQLite, guardado en un bucket de Cloudflare R2 (compatible con S3). Cada ejecución lo descarga, trabaja con
-`sqlite3` estándar y lo vuelve a subir. **Este ADR es solo diseño: no hay workflows ni scripts nuevos todavía.**
+`sqlite3` estándar y lo vuelve a subir. Implementado en `scripts/r2.sh`, `scripts/due.sh` y `.github/workflows/cron.yml`.
 Retoma el BACKLOG nº 33 y [reemplaza la propuesta inicial (Turso)](#alternativas-descartadas).
 
 ## Contexto
@@ -143,7 +143,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
-      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET_NAME }}
       R2_BOOTSTRAP: ${{ inputs.bootstrap && '1' || '0' }}
       AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -215,7 +215,7 @@ gasta créditos de forma relevante.
 
 ### Secretos y registros
 
-- Secrets de GitHub (Settings → Secrets and variables → Actions): `R2_ACCOUNT_ID`, `R2_BUCKET`, `R2_ACCESS_KEY_ID`,
+- Secrets de GitHub (Settings → Secrets and variables → Actions): `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`,
   `R2_SECRET_ACCESS_KEY`, `ODDS_API_KEY`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`. Cada uno se pasa por `env` solo al
   paso que lo necesita; GitHub los enmascara (`***`) en los registros.
 - Nada de `set -x`, `env` ni `printenv` en los pasos. Los scripts de `scripts/` ya mandan su salida a
@@ -278,3 +278,16 @@ justo por encima de los **2 000 min gratis** de un repositorio privado en el pla
 ## Fuera de alcance
 
 Bot interactivo, webhooks, varios usuarios, y cualquier cambio en el modelo, el sizing o los límites.
+
+## Implementación (2026-11-11)
+
+- **Interruptor del corte:** el job solo corre en los cron si la variable del repositorio `CLOUD_ENABLED` vale `true`
+  (el disparo manual funciona siempre). Así el workflow puede estar en `main` antes de sembrar la base y sirve de
+  freno de emergencia. Un job saltado no gasta minutos.
+- **`r2.sh`** probado en local con un `aws s3api` simulado: base ausente sin `bootstrap` (para), pull, push sin cambios
+  (no sube), push con cambios (copia diaria en `backups/`), cambio ajeno entre pull y push (412, copia en
+  `conflictos/`), base que encoge (no sube), base corrupta (no la acepta) y `bootstrap`. Para el AWS CLI real, el
+  subcomando va antes de las opciones (`aws s3api put-object --bucket …`), cosa que la simulación ahora exige.
+- **Limitación conocida:** `settle` solo toca si hay picks por liquidar, así que en los días sin ellos no se ejecuta
+  `notify --alerts` a las 04:00 (los avisos salen igualmente en el siguiente `scan` o `close`).
+- Pendiente de verificar en la primera ejecución real: AWS CLI, `sqlite3` y `--if-match` en el runner.
