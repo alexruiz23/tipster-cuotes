@@ -20,7 +20,7 @@ picks reales en papel.
 
 ## Estado
 
-**Paper trading desde el 2026-11-04.** `tipster status` muestra de un vistazo el bankroll, los picks abiertos, los liquidados, el ROI (con aviso de «muestra insuficiente» por debajo de 50 picks) y el CLV medio.
+**Paper trading desde el 2026-11-04, ejecutándose en la nube (GitHub Actions + R2, ver más abajo).** `tipster status` muestra de un vistazo el bankroll, los picks abiertos, los liquidados, el ROI (con aviso de «muestra insuficiente» por debajo de 50 picks) y el CLV medio.
 
 **Notificaciones por Telegram (opcionales, solo salientes; implementadas y probadas con envío real).** Define `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID` en `.env` y usa `tipster notify --picks | --settle | --status`. `scripts/scan.sh` y `scripts/settle.sh` lo llaman al terminar (el resultado va a `data/logs/notify.log`); si Telegram falla o no está configurado, el cron no se ve afectado. `settle` solo avisa si hubo picks con stake liquidados ese día.
 
@@ -159,16 +159,27 @@ cada fase (handoff) está en su plan; el de la Fase 1, en
 - Hacer scraping de webs de casas de apuestas.
 - Prometer beneficios: con pocas apuestas, ningún ROI demuestra nada.
 
-## Automatización local (macOS)
+## Ejecución en la nube (GitHub Actions + Cloudflare R2)
 
-`scripts/close.sh`, `scripts/settle.sh` y `scripts/scan.sh` (martes y viernes a las 12:00 locales, ~14 créditos cada uno) miran antes la base local y no llaman a la API (0 créditos) si no hay nada que hacer: `close` solo actúa con picks con stake que empiezan en los próximos `TIPSTER_CLOSING_WINDOW_MINUTES` (15) y `settle` con picks abiertos de entre 2 h y 3 días atrás (`/scores` no llega más lejos). Registro en `data/logs/`.
+Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones/013-nube-github-actions-r2.md)). El workflow `.github/workflows/cron.yml` descarga la base SQLite de un bucket privado de Cloudflare R2, ejecuta lo que toque con `scripts/scan.sh`, `settle.sh` y `close.sh`, y la vuelve a subir (`scripts/r2.sh pull|push`).
 
-```
-scripts/launchd/instalar.sh              # `close` cada 5 min, `settle` a diario a las 04:00 locales y `scan` los martes y viernes a las 12:00
-scripts/launchd/instalar.sh desinstalar
-launchctl list | grep tipster            # estado; `launchctl kickstart gui/$(id -u)/com.tipster.close` lo dispara
-```
+| Trabajo | Cuándo (cron en UTC) | Notas |
+|---|---|---|
+| `scan` | martes y viernes, a las 12:00 de Madrid | ~14 créditos; `scripts/due.sh` ajusta invierno y verano |
+| `settle` | a diario, hacia las 04:00 de Madrid | solo si hay picks abiertos de entre 2 h y 3 días atrás |
+| `close` | cada 15 min, de 11:00 a 22:45 UTC, martes, miércoles y viernes a domingo | una captura por pick a 0–15 min del inicio; sin cierre los partidos de lunes y jueves |
 
-**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 5,0], stake entre 0,50 € y 2 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
+- **Cada disparo decide por el estado de la base**, así que si GitHub retrasa o se salta un cron no se pierde trabajo. Los disparos sin tarea duran segundos y no instalan dependencias.
+- **Una sola cola** (`concurrency: tipster-db`) y subida con `If-Match`: nunca hay dos escritores. La base no se sube si no cambió, si no pasa `integrity_check` o si tiene menos filas que al descargarla. La primera copia del día va a `backups/` en R2, y un conflicto deja una copia en `conflictos/`.
+- **Secretos de Actions:** `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `ODDS_API_KEY`, `TELEGRAM_BOT_TOKEN` y `TELEGRAM_CHAT_ID`. El repositorio es privado y los registros solo enseñan contadores; el detalle de picks y bankroll va a Telegram.
+- **Interruptor:** los cron solo actúan con la variable del repositorio `CLOUD_ENABLED=true`. Para pararlo, bórrala o ponla en `false`.
+- **Prueba manual:** *Actions → Cron → Run workflow* con `accion = status` lee la base y muestra el estado (y envía el aviso) sin tocar nada. También permite forzar `scan`, `settle` o `close`.
+- **Presupuesto:** ≈ 1 160 min/mes de los 2 000 gratis del repositorio privado; con el límite de gasto en 0 $ los trabajos se detienen al agotarlos. Revisa *Settings → Billing → Usage*.
+- **Aviso:** `close` en Actions no es puntual (los cron se retrasan 5–15 min y pueden saltarse disparos): un cierre perdido deja el pick sin CLV. Si no basta, ver ADR 013.
+- **Comandos que escriben desde el Mac** (`take`, `bankroll deposit/withdraw`, `settle --result/--void`): no valen contra la base local, que quedó como copia. Se hacen con `scripts/r2.sh pull`, el comando y `scripts/r2.sh push` (con las variables `R2_BUCKET` y `AWS_*` de R2; hace falta `awscli`).
 
-**Aviso: el Mac debe estar despierto** (o con `caffeinate -s` activo) para que corran los agentes: `close` (cada 5 minutos, captura el cierre de Pinnacle y solo hace algo en los 15 minutos previos al inicio de un partido con pick) y `settle` (a las 04:00; con el Mac dormido a esa hora no se ejecuta y liquida en la siguiente ocasión, siempre que el partido siga dentro de los 3 días que alcanza `/scores`). `scan` corre los martes y viernes a las 12:00. Un cierre que se pierde no se recupera: el pick queda sin CLV. El repo debe estar fuera de Desktop/Documents/Downloads: launchd no puede leerlos (TCC de macOS).
+**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 15,0], stake del 1 % del bankroll entre 0,50 € y 5 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
+
+## Alternativa local (macOS, retirada)
+
+Los agentes launchd (`scripts/launchd/instalar.sh`, `instalar.sh desinstalar`) siguen en el repositorio pero **están retirados**: con la nube activa, tenerlos a la vez duplicaría scans y gastaría créditos de The Odds API. Si algún día se vuelve al modo local, hay que poner `CLOUD_ENABLED` en `false`, traer la base con `scripts/r2.sh pull` y reinstalar los agentes. En ese modo el Mac debe estar despierto (o con `caffeinate -s`) y el repo fuera de Desktop/Documents/Downloads (TCC de macOS).
