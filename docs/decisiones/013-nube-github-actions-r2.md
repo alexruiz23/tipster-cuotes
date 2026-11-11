@@ -115,7 +115,7 @@ on:
   schedule:
     - cron: "0 10-12 * * 2,5"       # scan: martes y viernes; due.sh espera a las 12:00 de Madrid (invierno y verano)
     - cron: "0 3-5 * * *"           # settle: tres intentos; solo corre el primero que encuentre trabajo
-    - cron: "*/15 14-22 * * 5,6,0" # close: viernes a domingo, 14:00-22:45 UTC
+    - cron: "*/15 14-22 * * 0,2,3,5,6" # close: martes, miércoles, viernes, sábado y domingo, 14:00-22:45 UTC
   workflow_dispatch:
     inputs:
       accion:
@@ -289,11 +289,12 @@ Bot interactivo, webhooks, varios usuarios, y cualquier cambio en el modelo, el 
   `notify --alerts` a las 04:00 (los avisos salen igualmente en el siguiente `scan` o `close`).
 - Pendiente de verificar en la primera ejecución real: AWS CLI, `sqlite3` y `--if-match` en el runner.
 
-### Recorte del `close` por presupuesto (2026-11-11)
+### Horario definitivo del `close` por presupuesto (2026-11-11)
 
-Decisión del usuario, con el límite de gasto de Actions en 0 $ («Stop usage»): `close` pasa a `*/15 14-22 * * 5,6,0`
-(viernes a domingo, 14:00–22:45 UTC; el lunes casi no hay partidos), unos 470 disparos al mes; con `settle` y `scan` son ≈ 590 min de los 2 000 gratis.
-Consecuencias: con un disparo cada 15 min y ventana de 15 min cada pick tiene como mucho **una** captura (a 0–15 min
-del inicio) y un retraso del cron la pierde; los **partidos de martes y miércoles (Champions, 17–20 UTC) y los anteriores a las
-14:15 UTC (sábado 12–13, domingo 11–13) quedan sin cierre**, es decir, sin CLV. Hay margen de sobra para añadirlos
-(`*/15 16-20 * * 2,3` y `*/15 11-13 * * 0,6` suman ≈ 280 min/mes más).
+Decisión del usuario, con el límite de gasto de Actions en 0 $ («Stop usage»): `close` pasa a
+`*/15 14-22 * * 0,2,3,5,6` (martes, miércoles, viernes, sábado y domingo, 14:00–22:45 UTC; el lunes casi no hay
+partidos y la Champions es martes y miércoles), unos 780 disparos al mes. Con `settle` y `scan` son **≈ 900 min de
+los 2 000 gratis**. Consecuencias: con un disparo cada 15 min y ventana de 15 min cada pick tiene como mucho **una**
+captura (a 0–15 min del inicio) y un retraso del cron la pierde; los partidos anteriores a las 14:15 UTC (sábado 12–13,
+domingo 11–13) y los de lunes quedan sin cierre, es decir, sin CLV. Si hiciera falta, `*/15 11-13 * * 0,6` los cubriría
+por ≈ 100 min/mes más.
