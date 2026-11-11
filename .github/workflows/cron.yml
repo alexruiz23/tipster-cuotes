@@ -7,10 +7,7 @@ on:
   schedule: # UTC; due.sh ajusta a la hora de Madrid, invierno y verano
     - cron: "0 10-12 * * 2,5" # scan: martes y viernes, espera a las 12:00 de Madrid
     - cron: "0 3-5 * * *" # settle: ~04:00 de Madrid, tres intentos
-    - cron: "*/5 18-20 * * 1,5" # close: lunes y viernes
-    - cron: "*/5 16-20 * * 2,3" # close: martes y miércoles
-    - cron: "*/5 11-20 * * 6" # close: sábado
-    - cron: "*/5 10-20 * * 0" # close: domingo
+    - cron: "*/15 14-22 * * 5,6,0,1" # close: de viernes a lunes, 14:00-22:45 UTC (presupuesto de minutos, ADR 013)
   workflow_dispatch:
     inputs:
       accion:

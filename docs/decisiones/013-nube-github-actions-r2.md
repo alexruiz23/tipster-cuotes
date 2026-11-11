@@ -115,10 +115,7 @@ on:
   schedule:
     - cron: "0 10-12 * * 2,5"       # scan: martes y viernes; due.sh espera a las 12:00 de Madrid (invierno y verano)
     - cron: "0 3-5 * * *"           # settle: tres intentos; solo corre el primero que encuentre trabajo
-    - cron: "*/5 18-20 * * 1,5"     # close: lunes y viernes
-    - cron: "*/5 16-20 * * 2,3"     # close: martes y miércoles (Champions)
-    - cron: "*/5 11-20 * * 6"       # close: sábado
-    - cron: "*/5 10-20 * * 0"       # close: domingo
+    - cron: "*/15 14-22 * * 5,6,0,1" # close: de viernes a lunes, 14:00-22:45 UTC
   workflow_dispatch:
     inputs:
       accion:
@@ -291,3 +288,12 @@ Bot interactivo, webhooks, varios usuarios, y cualquier cambio en el modelo, el 
 - **Limitación conocida:** `settle` solo toca si hay picks por liquidar, así que en los días sin ellos no se ejecuta
   `notify --alerts` a las 04:00 (los avisos salen igualmente en el siguiente `scan` o `close`).
 - Pendiente de verificar en la primera ejecución real: AWS CLI, `sqlite3` y `--if-match` en el runner.
+
+### Recorte del `close` por presupuesto (2026-11-11)
+
+Decisión del usuario, con el límite de gasto de Actions en 0 $ («Stop usage»): `close` pasa a `*/15 14-22 * * 5,6,0,1`
+(viernes a lunes, 14:00–22:45 UTC), unos 625 disparos al mes; con `settle` y `scan` son ≈ 740 min de los 2 000 gratis.
+Consecuencias: con un disparo cada 15 min y ventana de 15 min cada pick tiene como mucho **una** captura (a 0–15 min
+del inicio) y un retraso del cron la pierde; los **partidos de martes y miércoles (Champions, 17–20 UTC) y los anteriores a las
+14:15 UTC (sábado 12–13, domingo 11–13) quedan sin cierre**, es decir, sin CLV. Hay margen de sobra para añadirlos
+(`*/15 16-20 * * 2,3` y `*/15 11-13 * * 0,6` suman ≈ 280 min/mes más).
