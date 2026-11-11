@@ -21,7 +21,7 @@ Retoma el BACKLOG nº 33 y [reemplaza la propuesta inicial (Turso)](#alternativa
 1. **La base vive en R2** como un único objeto, `tipster.sqlite`, en un bucket privado. Credenciales y claves, solo
    como Secrets de GitHub.
 2. **Un solo workflow, `cron.yml`, con una sola cola** (`concurrency: tipster-db`, sin cancelar el que está en curso).
-   GitHub guarda **un único** ejecución pendiente por grupo y la sustituye por la siguiente; por eso el workflow es
+   GitHub guarda **una única** ejecución pendiente por grupo y la sustituye por la siguiente; por eso el workflow es
    **«por nivel»**: en cada disparo decide qué toca ahora mirando la base (no mira qué cron lo lanzó). Si un disparo
    se pierde, se retrasa o lo sustituyen en la cola, el siguiente hace lo mismo y no se pierde ningún trabajo.
 3. **Dos scripts de shell nuevos** (sin Python): `scripts/r2.sh pull|push` (descarga y subida seguras) y
