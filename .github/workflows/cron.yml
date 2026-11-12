@@ -7,14 +7,31 @@ on:
   schedule: # UTC; due.sh ajusta a la hora de Madrid, invierno y verano
     - cron: "0 10-12 * * 2,5" # scan: martes y viernes, espera a las 12:00 de Madrid
     - cron: "0 3-5 * * *" # settle: ~04:00 de Madrid, tres intentos
-    - cron: "*/15 11-22 * * 0,2,3,5,6" # close: mar, mié (Champions) y vie-dom, 11:00-22:45 UTC (ADR 013)
+    # close: mar, mié (Champions) y vie-dom, 11:00-22:45 UTC, y los lunes 17:00-21:45 UTC (ADR 013).
+    # Los cron de Actions llegan tarde o no llegan: el Worker de cloudflare/dispatcher/ dispara el
+    # mismo workflow con puntualidad. Con el Worker verificado, comenta estas dos líneas para no
+    # pagar los minutos dos veces (ver cloudflare/dispatcher/README.md).
+    - cron: "*/15 11-22 * * 0,2,3,5,6"
+    - cron: "*/15 17-21 * * 1"
   workflow_dispatch:
     inputs:
       accion:
         description: "Forzar un trabajo (auto = decide solo; status = solo lee y muestra el estado)"
         type: choice
-        options: [auto, scan, settle, close, status]
+        options: [auto, scan, settle, close, status, take, void]
         default: auto
+      pick_id:
+        description: "take/void: id del pick (sale en el aviso de Telegram, p. ej. 12)"
+        type: string
+        default: ""
+      precio:
+        description: "take: cuota real que ves en la web .es (p. ej. 2.05)"
+        type: string
+        default: ""
+      casa:
+        description: "take: casa donde la tomas (opcional, p. ej. bwin.es)"
+        type: string
+        default: ""
       bootstrap:
         description: "Crear la base en R2 si no existe (solo la primera vez)"
         type: boolean
@@ -44,7 +61,22 @@ jobs:
       AWS_REQUEST_CHECKSUM_CALCULATION: when_required
       AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
       FORCE: ${{ inputs.accion }}
+      IN_PICK: ${{ inputs.pick_id }}
+      IN_PRECIO: ${{ inputs.precio }}
+      IN_CASA: ${{ inputs.casa }}
     steps:
+      # Las entradas manuales llegan por variables de entorno (nunca interpoladas en el script) y se
+      # validan antes de tocar nada
+      - name: Validar las entradas
+        run: |
+          case "$FORCE" in
+            take|void)
+              [[ "$IN_PICK" =~ ^[0-9]+$ ]] || { echo "::error::$FORCE necesita pick_id numérico"; exit 1; } ;;&
+            take)
+              [[ "$IN_PRECIO" =~ ^[0-9]+([.,][0-9]+)?$ ]] || { echo "::error::take necesita precio, p. ej. 2.05"; exit 1; }
+              [[ "$IN_CASA" =~ ^[A-Za-z0-9._\ -]{0,40}$ ]] || { echo "::error::casa solo admite letras, números y . _ -"; exit 1; } ;;
+          esac
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Descargar la base de R2
@@ -57,7 +89,7 @@ jobs:
           for job in scan settle close; do
             if bash scripts/due.sh "$job"; then echo "$job=1" >> "$GITHUB_OUTPUT"; any=1; fi
           done
-          [ "$FORCE" = status ] && any=1
+          case "$FORCE" in status|take|void) any=1 ;; esac
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
       # Las dependencias solo se instalan si hay trabajo: un disparo ocioso dura segundos
@@ -80,10 +112,20 @@ jobs:
           DUE_CLOSE: ${{ steps.due.outputs.close }}
         run: |
           rc=0
+          PY="env PYTHONPATH=src .venv/bin/python -m tipster"
+          if [ "$FORCE" = take ]; then
+            $PY take "$IN_PICK" --price "${IN_PRECIO/,/.}" ${IN_CASA:+--bookmaker "$IN_CASA"} || rc=$?
+          fi
+          if [ "$FORCE" = void ]; then
+            # el pick_id es numérico (validado arriba); se traduce al evento que `settle --void` espera
+            ev="$(sqlite3 data/tipster.sqlite "SELECT q.event_id FROM picks p JOIN odds_quotes q ON q.id = p.quote_id WHERE p.id = $IN_PICK")"
+            if [ -z "$ev" ]; then echo "::error::no existe el pick $IN_PICK"; rc=1; else $PY settle --void "$ev" || rc=$?; fi
+          fi
           [ "$DUE_SETTLE" = 1 ] && { bash scripts/settle.sh || rc=$?; }
           [ "$DUE_CLOSE" = 1 ] && { bash scripts/close.sh || rc=$?; }
           [ "$DUE_SCAN" = 1 ] && { bash scripts/scan.sh || rc=$?; }
-          [ "$FORCE" = status ] && { PYTHONPATH=src .venv/bin/python -m tipster status || rc=$?; }
+          [ "$FORCE" = status ] && { $PY status || rc=$?; }
+          case "$FORCE" in take|void) $PY status || true ;; esac
           exit "$rc"
 
       - name: Subir la base a R2 (aunque el paso anterior fallara)

@@ -14,7 +14,12 @@ q() { sqlite3 "$DB" "$1"; }
 mad_dow="$(TZ=Europe/Madrid date +%u)" # 1 = lunes … 7 = domingo
 mad_h=$((10#$(TZ=Europe/Madrid date +%H)))
 today="$(date -u +%F)" # runs.started_at está en UTC
-ran_today() { [ "$(q "SELECT COUNT(*) FROM runs WHERE command = '$1' AND started_at >= '${today}T00:00:00'")" -gt 0 ]; }
+# solo cuenta una ejecución que terminó bien: un scan o settle en error (o caído a mitad, `en_curso`)
+# se reintenta en el siguiente disparo del día
+ran_today() {
+  [ "$(q "SELECT COUNT(*) FROM runs WHERE command = '$1' AND status IN ('ok', 'parcial')
+          AND started_at >= '${today}T00:00:00'")" -gt 0 ]
+}
 
 case "$job" in
   scan) # martes y viernes desde las 12:00 de Madrid, una vez al día

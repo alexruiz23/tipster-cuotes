@@ -297,3 +297,32 @@ partidos, la Champions es martes y miércoles y los partidos de la mañana del f
 unos 1 040 disparos al mes. Con `settle` y `scan` son **≈ 1 160 min de los 2 000 gratis**. Consecuencias: con un
 disparo cada 15 min y ventana de 15 min cada pick tiene como mucho **una** captura (a 0–15 min del inicio) y un
 retraso del cron la pierde; los partidos de lunes y jueves quedan sin cierre, es decir, sin CLV.
+
+## Cambios del 2026-11-12
+
+**Qué mostró la primera noche.** Desde el 11/11 a las 19:26 UTC hasta el 12/11 a las 09:49 UTC GitHub lanzó **1
+de unos 17 disparos programados**: el `close` del miércoles por la noche (14 disparos esperados) solo se ejecutó
+una vez, a las 01:36 UTC del jueves (casi 3 h tarde), y ninguno de los 3 de `settle` (03:00–05:00 UTC). Es una muestra
+de medio día y los cron recién creados suelen tardar en arrancar, pero confirma el riesgo nº 1 de este ADR: un
+cierre que llega tarde no se captura.
+
+1. **Worker de Cloudflare como disparador** ([`cloudflare/dispatcher/`](../../cloudflare/dispatcher/README.md)). Un
+   Cron Trigger de Cloudflare (puntual, gratis) llama cada 15 min, en las franjas de partidos, al `workflow_dispatch`
+   de `cron.yml` con `accion=auto`. El workflow no cambia: sigue decidiendo por el estado de la base. Avisa por
+   Telegram si el disparo falla. Con el Worker verificado hay que **comentar el cron de `close` de Actions** (si no, los
+   minutos se pagan dos veces: ≈ 2 400/mes frente a ≈ 1 250). `scan` y `settle` conservan su cron de Actions.
+2. **`close` también los lunes** (17:00–21:45 UTC, `*/15 17-21 * * 1`): LaLiga, Premier y Serie A juegan algunos
+   lunes y el scan del viernes puede dar stake a esos partidos. ≈ +90 disparos al mes.
+3. **`take` y `void` desde el móvil.** `workflow_dispatch` admite `accion = take` (con `pick_id`, `precio` y `casa`)
+   y `accion = void` (con `pick_id`). Las entradas llegan por variables de entorno (nunca interpoladas en el
+   script) y se validan antes de descargar nada; la coma decimal se acepta (`2,05`). `void` traduce el pick al evento
+   que espera `settle --void`. Después imprime `status`. Ya no hace falta `awscli` en el Mac para esto.
+4. **Reintento del scan.** `due.sh` solo da por hecho un `scan` o `settle` del día si terminó en `ok` o `parcial`; uno en
+   `error` o caído a mitad (`en_curso`) se reintenta en el siguiente disparo (el cron del scan tiene tres: 10, 11 y 12
+   UTC). Probado ejecutando `due.sh` con un reloj simulado (`tests/integration/test_due_sh.py`).
+5. **Erratas:** `close.sh` y `settle.sh` **no** llaman a `due.sh` (el SQL está duplicado a propósito, con el aviso de
+   mantenerlo en sincronía en la cabecera de `due.sh`); y se quitó un `.DS_Store` que se había subido.
+
+**Sigue abierto:** con disparo cada 15 min y ventana de 15 min cada pick tiene una sola captura (a 0–15 min del
+inicio); subir `TIPSTER_CLOSING_WINDOW_MINUTES` a 30 daría dos intentos a cambio de un cierre menos cercano.
+

@@ -167,7 +167,7 @@ Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones
 |---|---|---|
 | `scan` | martes y viernes, a las 12:00 de Madrid | ~14 créditos; `scripts/due.sh` ajusta invierno y verano |
 | `settle` | a diario, hacia las 04:00 de Madrid | solo si hay picks abiertos de entre 2 h y 3 días atrás |
-| `close` | cada 15 min, de 11:00 a 22:45 UTC, martes, miércoles y viernes a domingo | una captura por pick a 0–15 min del inicio; sin cierre los partidos de lunes y jueves |
+| `close` | cada 15 min, de 11:00 a 22:45 UTC martes, miércoles y viernes a domingo, y de 17:00 a 21:45 UTC los lunes | una captura por pick a 0–15 min del inicio; sin cierre los partidos de jueves. Lo dispara con puntualidad el [Worker de Cloudflare](cloudflare/dispatcher/README.md); el cron de Actions es de respaldo |
 
 - **Cada disparo decide por el estado de la base**, así que si GitHub retrasa o se salta un cron no se pierde trabajo. Los disparos sin tarea duran segundos y no instalan dependencias.
 - **Una sola cola** (`concurrency: tipster-db`) y subida con `If-Match`: nunca hay dos escritores. La base no se sube si no cambió, si no pasa `integrity_check` o si tiene menos filas que al descargarla. La primera copia del día va a `backups/` en R2, y un conflicto deja una copia en `conflictos/`.
@@ -175,8 +175,10 @@ Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones
 - **Interruptor:** los cron solo actúan con la variable del repositorio `CLOUD_ENABLED=true`. Para pararlo, bórrala o ponla en `false`.
 - **Prueba manual:** *Actions → Cron → Run workflow* con `accion = status` lee la base y muestra el estado (y envía el aviso) sin tocar nada. También permite forzar `scan`, `settle` o `close`.
 - **Presupuesto:** ≈ 1 160 min/mes de los 2 000 gratis del repositorio privado; con el límite de gasto en 0 $ los trabajos se detienen al agotarlos. Revisa *Settings → Billing → Usage*.
-- **Aviso:** `close` en Actions no es puntual (los cron se retrasan 5–15 min y pueden saltarse disparos): un cierre perdido deja el pick sin CLV. Si no basta, ver ADR 013.
-- **Comandos que escriben desde el Mac** (`take`, `bankroll deposit/withdraw`, `settle --result/--void`): no valen contra la base local, que quedó como copia. Se hacen con `scripts/r2.sh pull`, el comando y `scripts/r2.sh push` (con las variables `R2_BUCKET` y `AWS_*` de R2; hace falta `awscli`).
+- **Aviso:** `close` disparado por el cron de Actions no es puntual (el 12/11 solo llegó 1 de unos 17 disparos, con casi 3 h de retraso): un cierre perdido deja el pick sin CLV. Por eso existe el [Worker de Cloudflare](cloudflare/dispatcher/README.md) (ADR 013); una vez desplegado y comprobado, comenta el cron de `close` en `cron.yml` para no pagar los minutos dos veces.
+- **`take` y `void` desde el móvil:** *Actions → Cron → Run workflow* con `accion = take` (más `pick_id`, `precio` y, si quieres, `casa`) registra la cuota real de un pick; con `accion = void` y `pick_id` anula el de un partido aplazado. El id del pick sale en el aviso de Telegram. Imprime el `status` al terminar.
+- **Un scan o settle que falló se reintenta** en el siguiente disparo del día; solo cuenta como hecho si terminó bien.
+- **Comandos que escriben desde el Mac** (`bankroll deposit/withdraw`, `settle --result`, y `take`/`void` si prefieres la terminal): no valen contra la base local, que quedó como copia. Se hacen con `scripts/r2.sh pull`, el comando y `scripts/r2.sh push` (con las variables `R2_BUCKET` y `AWS_*` de R2; hace falta `awscli`).
 
 **El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 15,0], stake del 1 % del bankroll entre 0,50 € y 5 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
 

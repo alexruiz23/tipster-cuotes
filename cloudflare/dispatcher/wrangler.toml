@@ -1,0 +1,22 @@
+# Worker que dispara el workflow Cron de GitHub Actions con puntualidad (ADR 013).
+# Los cron de Actions se retrasan horas o no llegan; un Cron Trigger de Cloudflare sí es puntual.
+# Pasos de despliegue en README.md.
+name = "tipster-dispatcher"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+workers_dev = false # sin URL pública: solo se ejecuta por cron
+
+[triggers]
+# UTC. Mismas franjas que el `close` de .github/workflows/cron.yml (ver README: no dejes los dos activos)
+crons = ["*/15 11-22 * * 0,2,3,5,6", "*/15 17-21 * * 1"]
+
+[vars]
+GITHUB_REPO = "alexruiz23/tipster-cuotes"
+WORKFLOW = "cron.yml"
+REF = "main"
+
+# Opcional pero recomendado: el mismo bucket de R2 de la base, solo para no repetir el aviso de fallo
+# más de una vez cada 6 h. Cambia el nombre por el de tu bucket (el de R2_BUCKET_NAME) o borra el bloque.
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "cambia-este-bucket"
