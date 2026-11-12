@@ -31,7 +31,7 @@ def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
     )
     if not rows:
         return "Último scan: sin picks con stake."
-    lines = [f"Último scan: {len(rows)} picks con stake (cuota real: tipster take ID --price X)"]
+    lines = [f"Último scan: {len(rows)} picks con stake"]
     for home, away, ko, market, sel, book, price, ev, stake, feed_es, _, _, pick_id in rows:
         when = from_iso(ko).astimezone(tz).strftime("%d/%m %H:%M")
         warn = "" if feed_es else " · verifica la cuota en la web .es"

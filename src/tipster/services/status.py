@@ -128,11 +128,8 @@ def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
                 f"  Muestra insuficiente: {st.clv.n} < {MIN_CLV_SAMPLE} picks con CLV; "
                 "la media aún no dice nada."
             )
-    if st.stake_picks:
-        lines.append(
-            f"Cuota real registrada: {st.taken_picks} de {st.stake_picks} picks con stake"
-            + ("" if st.taken_picks else " (usa `tipster take`: el paper trading usa la del feed)")
-        )
+    if st.taken_picks:  # opcional: sin cuotas reales registradas no se dice nada
+        lines.append(f"Cuota real registrada: {st.taken_picks} de {st.stake_picks} picks con stake")
     if st.clv_taken is not None and st.clv_taken.mean is not None:
         feed = (
             "" if st.clv_feed_same is None else f" · el feed daba {st.clv_feed_same * 100:+.2f} %"

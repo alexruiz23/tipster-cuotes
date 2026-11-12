@@ -117,10 +117,10 @@ def test_status_compara_el_clv_real_con_el_del_feed(conn: sqlite3.Connection) ->
     assert "CLV real:   +0.00 % en 1 picks · el feed daba +10.00 %" in text
 
 
-def test_status_avisa_si_no_hay_ninguna_cuota_real(conn: sqlite3.Connection) -> None:
+def test_status_no_menciona_la_cuota_real_si_no_hay_ninguna(conn: sqlite3.Connection) -> None:
     _open(conn, "e1", minutes_to_kickoff=600)
     text = "\n".join(status_lines(paper_status(conn, NOW), ZoneInfo("Europe/Madrid")))
-    assert "Cuota real registrada: 0 de 1" in text and "tipster take" in text
+    assert "Cuota real" not in text and "CLV real" not in text and "tipster take" not in text
 
 
 # -- CLI ---------------------------------------------------------------------------------------
