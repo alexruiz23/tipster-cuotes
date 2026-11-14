@@ -398,3 +398,19 @@ El Kelly fraccionado no es viable con 100 € y cuotas altas: el 1/4 de Kelly de
 ## Segunda División excluida del paper trading (09/11/2026)
 
 Segunda División excluida del paper trading hasta que se verifique una fuente de cierre fiable (Pinnacle no cubre el cierre en esta liga). Evidencia: en Las Palmas – Eldense (8/11) `close` no encontró cuota de Pinnacle en tres intentos (17:16, 17:21 y 17:26 UTC), así que el pick no tiene CLV; además `/scores` no devolvió ese partido. `segunda` sale de `settings.competitions` por defecto (queda en el registro y puede reactivarse con `TIPSTER_COMPETITIONS`). Ver BACKLOG nº 37.
+
+## Cambio del 2026-11-14: `max_odds` baja de 15,0 a 8,0
+
+Decisión del usuario tras ver el scan del 14/11: 5 de los 9 picks con stake eran cuotas de entre 7 y 12,5 (casi todas de
+`marathonbet_no_es`, con EV de +4 a +9 %). Es la zona donde el devig multiplicativo sobrestima el EV (ver «Sesgo
+favorito-longshot» arriba), y el CLV de los 3 primeros picks cerrados es −14 % (± 6,2; muestra insuficiente). Con flat el
+riesgo por apuesta sigue acotado (≈ 1 €), pero un EV inflado contamina justo la medida que se quiere comprobar.
+
+- **Qué cambia:** a partir de ahora un VALUE con cuota > 8 no recibe stake (se sigue mostrando, con el motivo escrito) y no
+  compite con otros picks de su partido. `min_odds` sigue en 1,5. No hay ninguna variable que lo sobrescriba en el workflow.
+- **Qué no cambia:** los picks ya abiertos con cuota mayor (los del scan del 14/11: cuotas 8,3, 11,25, 11,5 y 12,5) se hicieron
+  con la regla anterior y se dejan correr; cuentan en el ROI y el CLV. Si se quisiera una muestra limpia habría que anularlos
+  con `void`, a costa de perder datos.
+- **Valor elegido por prudencia, no ajustado con datos** (igual que el 10 original). Reevaluar cuando haya ≈ 30 picks con CLV:
+  comparar el CLV de los picks con cuota > 8 y ≤ 8 permitiría decidir con datos si el tope sobra, falta o está bien.
+

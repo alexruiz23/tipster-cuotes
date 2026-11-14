@@ -81,8 +81,9 @@ class Settings(BaseSettings):
     max_stake: float = Field(default=0.02, gt=0, le=1)  # por apuesta, fracción del bankroll
     daily_exposure: float = Field(default=0.10, gt=0, le=1)
     daily_loss_limit: float = Field(default=0.05, gt=0, le=1)  # provisional
-    # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado
-    max_odds: float = Field(default=15.0, gt=1)
+    # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado. 8,0 desde el
+    # 2026-11-14 (antes 15,0): ver «Cambio del 2026-11-14» en el ADR 012
+    max_odds: float = Field(default=8.0, gt=1)
     min_odds: float = Field(default=1.5, gt=1)
     min_stake: float = Field(default=0.005, ge=0, lt=1)  # fracción del bankroll: 0,50 € con 100 €
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio

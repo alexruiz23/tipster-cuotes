@@ -146,7 +146,7 @@ def test_una_cuota_por_encima_de_max_odds_no_lleva_stake_ni_compite_en_su_partid
 
 def test_la_configuracion_por_defecto_es_la_de_100_euros() -> None:
     s = Settings(_env_file=None)
-    assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 15.0)
+    assert (s.bankroll_initial, s.min_stake, s.min_odds, s.max_odds) == (100.0, 0.005, 1.5, 8.0)
     assert (s.sizing_strategy, s.stake_pct) == ("flat", 0.01)
     assert (s.min_stake_abs, s.max_stake_abs) == (0.5, 5.0)
     assert (s.max_daily_exposure_pct, s.max_daily_loss_pct) == (0.05, 0.10)
@@ -165,7 +165,16 @@ def test_una_cuota_de_20_se_descarta_por_el_max_odds_por_defecto(
     )
     quote = make_quote(price=20.0)
     reason = service._blocked(make_opportunity(quote=quote), loss_hit=False, open_events={})
-    assert reason == "cuota 20 por encima de max_odds 15 (sesgo favorito-longshot)"
+    assert reason == "cuota 20 por encima de max_odds 8 (sesgo favorito-longshot)"
+    # 8,0 es el tope: una cuota de exactamente 8 pasa y una de 8,3 no
+    ok = service._blocked(
+        make_opportunity(quote=make_quote(price=8.0)), loss_hit=False, open_events={}
+    )
+    over = service._blocked(
+        make_opportunity(quote=make_quote(price=8.3)), loss_hit=False, open_events={}
+    )
+    assert ok is None
+    assert over == "cuota 8.3 por encima de max_odds 8 (sesgo favorito-longshot)"
 
 
 def test_una_cuota_de_1_20_se_descarta_por_el_min_odds_por_defecto(

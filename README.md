@@ -180,7 +180,7 @@ Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones
 - **Un scan o settle que falló se reintenta** en el siguiente disparo del día; solo cuenta como hecho si terminó bien.
 - **Comandos que escriben desde el Mac** (`bankroll deposit/withdraw`, `settle --result`, y `take`/`void` si prefieres la terminal): no valen contra la base local, que quedó como copia. Se hacen con `scripts/r2.sh pull`, el comando y `scripts/r2.sh push` (con las variables `R2_BUCKET` y `AWS_*` de R2; hace falta `awscli`).
 
-**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 15,0], stake del 1 % del bankroll entre 0,50 € y 5 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
+**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 8,0], stake del 1 % del bankroll entre 0,50 € y 5 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
 
 ## Alternativa local (macOS, retirada)
 
