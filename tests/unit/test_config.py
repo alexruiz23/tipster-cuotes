@@ -30,15 +30,17 @@ def test_valores_por_defecto(monkeypatch: pytest.MonkeyPatch) -> None:
     assert "segunda" not in s.competitions
     assert s.markets == ("1x2", "ou_2.5")
     assert s.reference_order == ("pinnacle", "betfair_ex_no_es")
-    assert s.devig_method is DevigMethod.MULTIPLICATIVE
+    assert s.devig_method is DevigMethod.SHIN
+    assert (s.longshot_odds, s.longshot_ev_min, s.max_open_longshots) == (4.0, 0.06, 2)
+    assert (s.max_odds, s.max_days_ahead) == (8.0, 4)
     t = s.thresholds()
     assert (t.ev_min, t.error_margin, t.max_quote_age) == (0.03, 0.15, timedelta(minutes=10))
 
 
 def test_listas_separadas_por_comas(monkeypatch: pytest.MonkeyPatch) -> None:
-    s = _settings(monkeypatch, TIPSTER_COMPETITIONS="laliga, premier", TIPSTER_DEVIG_METHOD="shin")
+    s = _settings(monkeypatch, TIPSTER_COMPETITIONS="laliga, premier", TIPSTER_DEVIG_METHOD="power")
     assert s.competitions == ("laliga", "premier")
-    assert s.devig_method is DevigMethod.SHIN
+    assert s.devig_method is DevigMethod.POWER
 
 
 def test_btts_se_rechaza_citando_d5(monkeypatch: pytest.MonkeyPatch) -> None:

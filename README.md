@@ -101,7 +101,7 @@ uv run tipster clv                 # CLV de los picks con cierre fiable
 jurisdicción de su feed), cuota, cuota justa, p_modelo («—»: con `w = 1` no se usa), p_mercado, EV, stake
 (1/4 de Kelly con tope del 2 %, solo en los VALUE), etiqueta, referencia usada y hora de captura. Etiquetas:
 
-- **VALUE**: EV de al menos el mínimo configurado (3 % por defecto).
+- **VALUE**: EV de al menos el mínimo configurado (3 % por defecto). Solo recibe stake si además cumple su nivel (principal o improbable) y el partido empieza en los próximos 4 días; si no, se muestra con el motivo.
 - **POSIBLE ERROR · RIESGO DE ANULACIÓN**: cuota más de un 15 % por encima de la justa.
 - **FEED NO-ES · VERIFICA LA CUOTA EN LA WEB .ES**: acompaña a toda cuota que no viene de la web
   española de la casa. Hoy son todas: The Odds API no tiene feeds .es (D1).
@@ -180,7 +180,7 @@ Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones
 - **Un scan o settle que falló se reintenta** en el siguiente disparo del día; solo cuenta como hecho si terminó bien.
 - **Comandos que escriben desde el Mac** (`bankroll deposit/withdraw`, `settle --result`, y `take`/`void` si prefieres la terminal): no valen contra la base local, que quedó como copia. Se hacen con `scripts/r2.sh pull`, el comando y `scripts/r2.sh push` (con las variables `R2_BUCKET` y `AWS_*` de R2; hace falta `awscli`).
 
-**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Cuotas válidas [1,5, 8,0], stake del 1 % del bankroll entre 0,50 € y 5 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
+**El paper trading empieza el 2026-11-04 con 100 €** (base nueva; la anterior, de pruebas, está en `data/tipster.sqlite.old`). Devig Shin; nivel principal de cuota 1,5 a 4 (EV ≥ 3 %) y nivel improbable de 4 a 8 (EV ≥ 6 %, como mucho 2 abiertos a la vez); solo partidos de los próximos 4 días ([ADR 014](docs/decisiones/014-niveles-shin-horizonte.md)), stake del 1 % del bankroll entre 0,50 € y 5 € ([ADR 012](docs/decisiones/012-fase-3-probabilidad-stake-clv.md)).
 
 ## Alternativa local (macOS, retirada)
 

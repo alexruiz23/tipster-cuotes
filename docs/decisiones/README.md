@@ -19,3 +19,4 @@ tu OK), *Aceptada*, *Rechazada* o *Sustituida por NNN*.
 | [011](011-evaluacion-formal.md) | Evaluación formal con reajuste (walk-forward estricto) y cierre de la Fase 2 | Aceptada |
 | [012](012-fase-3-probabilidad-stake-clv.md) | Fase 3: probabilidad final, Kelly, picks y CLV | Aceptada |
 | [013](013-nube-github-actions-r2.md) | Ejecución en la nube: GitHub Actions + SQLite en Cloudflare R2 | Aceptada (sin implementar) |
+| [014](014-niveles-shin-horizonte.md) | Picks probables: devig Shin, dos niveles (principal e improbable) y horizonte de 4 días | Aceptada e implementada |

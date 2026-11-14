@@ -160,6 +160,34 @@ class SqliteTrackingRepository:
         ).fetchall()
         return {r[0]: float(r[1]) for r in rows}
 
+    def open_longshots(self, above_odds: float) -> int:
+        """Picks abiertos con stake cuya cuota supera `above_odds`."""
+        row = self._conn.execute(
+            "SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id"
+            " WHERE p.status = 'abierto' AND p.stake > 0 AND q.price > ?",
+            (above_odds,),
+        ).fetchone()
+        return int(row[0])
+
+    def clv_breakdown(self, longshot_odds: float) -> dict[str, list[tuple[str, int, float]]]:
+        """CLV medio de los picks con stake y cierre fiable, por nivel y por casa:
+        {"nivel": [(nombre, n, media)], "casa": [...]}, de más a menos picks."""
+        out: dict[str, list[tuple[str, int, float]]] = {}
+        for key, expr in (
+            ("nivel", "CASE WHEN q.price > ? THEN 'improbable' ELSE 'principal' END"),
+            ("casa", "q.bookmaker_id"),
+        ):
+            params = (longshot_odds,) if key == "nivel" else ()
+            rows = self._conn.execute(
+                f"SELECT {expr} AS g, COUNT(*), AVG(p.clv) FROM picks p"
+                " JOIN odds_quotes q ON q.id = p.quote_id"
+                " WHERE p.closing_reliable = 1 AND p.clv IS NOT NULL AND p.stake > 0"
+                " GROUP BY g ORDER BY COUNT(*) DESC, g",
+                params,
+            ).fetchall()
+            out[key] = [(str(r[0]), int(r[1]), float(r[2])) for r in rows]
+        return out
+
     def exposure(self, start: datetime, end: datetime) -> float:
         """Suma de stakes abiertos de partidos que empiezan en [start, end)."""
         row = self._conn.execute(

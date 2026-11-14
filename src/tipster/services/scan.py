@@ -42,6 +42,7 @@ ONE_PER_EVENT = "otro pick de este partido tiene más EV"
 ALREADY_OPEN = "ya hay un pick abierto con stake en este partido"
 LOSS_LIMIT = "límite de pérdida diaria alcanzado"
 NO_ROOM = "sin hueco en el tope diario de exposición"
+NO_LONGSHOT_ROOM = "tope de picks improbables abiertos alcanzado"
 
 QuoteKey = tuple[str, str, str, str]  # evento, casa, mercado, selección
 
@@ -293,9 +294,20 @@ class ScanService:
         )
 
     def _blocked(
-        self, o: Opportunity, *, loss_hit: bool, open_events: dict[str, float]
+        self,
+        o: Opportunity,
+        *,
+        loss_hit: bool,
+        open_events: dict[str, float],
+        now: datetime | None = None,
     ) -> str | None:
         """Motivo por el que un VALUE no puede llevar stake, o None."""
+        s = self._settings
+        if now is not None and o.event.kickoff - now > timedelta(days=s.max_days_ahead):
+            return (
+                f"el partido empieza a más de {s.max_days_ahead} días "
+                "(se evaluará en un scan posterior)"
+            )
         min_odds = self._settings.min_odds
         if o.quote.price < min_odds:
             return f"cuota {o.quote.price:g} por debajo de min_odds {min_odds:g}"
@@ -305,9 +317,47 @@ class ScanService:
                 f"cuota {o.quote.price:g} por encima de max_odds {max_odds:g} "
                 "(sesgo favorito-longshot)"
             )
+        if o.quote.price > s.longshot_odds and o.ev < s.longshot_ev_min:
+            return (
+                f"cuota {o.quote.price:g} improbable (> {s.longshot_odds:g}): exige EV de "
+                f"{s.longshot_ev_min:.0%} y tiene {o.ev:.1%}"
+            )
         if loss_hit:
             return LOSS_LIMIT
         return ALREADY_OPEN if o.event.id in open_events else None
+
+    def _select(
+        self,
+        values: list[Pick],
+        loss_hit: bool,
+        open_events: dict[str, float],
+        now: datetime,
+    ) -> tuple[dict[int, str | None], dict[str, Pick], set[int]]:
+        """Qué VALUE pueden llevar stake: motivo de bloqueo de cada uno, el mejor de cada partido
+        entre los no bloqueados y los improbables que se quedan sin hueco (ADR 014)."""
+        s = self._settings
+        blocked_why = {
+            p.quote_id: self._blocked(
+                p.opportunity, loss_hit=loss_hit, open_events=open_events, now=now
+            )
+            for p in values
+        }
+        best: dict[str, Pick] = {}
+        for pick in values:
+            if blocked_why[pick.quote_id] is not None:
+                continue  # un pick que no puede llevar stake no compite por el de su partido
+            current = best.get(pick.opportunity.event.id)
+            if current is None or pick.opportunity.ev > current.opportunity.ev:
+                best[pick.opportunity.event.id] = pick
+        # Improbables (cuota > longshot_odds): como mucho `max_open_longshots` abiertos a la vez,
+        # contando los que ya lo están; entran primero los de más EV
+        slots = max(s.max_open_longshots - self._tracking.open_longshots(s.longshot_odds), 0)
+        longshots = sorted(
+            (p for p in best.values() if p.opportunity.quote.price > s.longshot_odds),
+            key=lambda p: p.opportunity.ev,
+            reverse=True,
+        )
+        return blocked_why, best, {p.quote_id for p in longshots[slots:]}
 
     def _assign_stakes(self, result: ScanResult, now: datetime) -> None:
         """Stake a los VALUE (ADR 012): flat (`stake_pct` del bankroll) o Kelly de 1/4 con topes;
@@ -326,22 +376,18 @@ class ScanService:
         loss_limit = s.max_daily_loss_pct if flat else s.daily_loss_limit
         loss_hit = loss_limit_reached(pnl, bankroll=bank, limit=loss_limit)
         open_events = self._tracking.stake_by_open_event()
-        best: dict[str, Pick] = {}
-        for pick in values:
-            if not s.min_odds <= pick.opportunity.quote.price <= s.max_odds:
-                continue  # una cuota fuera de rango no compite por el stake del partido
-            current = best.get(pick.opportunity.event.id)
-            if current is None or pick.opportunity.ev > current.opportunity.ev:
-                best[pick.opportunity.event.id] = pick
+        blocked_why, best, no_slot = self._select(values, loss_hit, open_events, now)
         decided: dict[int, tuple[float, str]] = {}
         by_day: dict[date, list[tuple[str, float, float]]] = defaultdict(list)
         for pick in values:
             o = pick.opportunity
-            blocked = self._blocked(o, loss_hit=loss_hit, open_events=open_events)
+            blocked = blocked_why[pick.quote_id]
             if blocked is not None:
                 decided[pick.quote_id] = (0.0, blocked)
             elif best[o.event.id] is not pick:
                 decided[pick.quote_id] = (0.0, ONE_PER_EVENT)
+            elif pick.quote_id in no_slot:
+                decided[pick.quote_id] = (0.0, NO_LONGSHOT_ROOM)
             else:
                 raw = (
                     flat_stake(

@@ -51,6 +51,11 @@ def _settings(**overrides: object) -> Settings:
         "bankroll_initial": 1000.0,
         "min_stake": 0.0025,
         "max_odds": 10.0,
+        # reglas anteriores al ADR 014 (los casos a mano usan devig multiplicativo, sin horizonte ni
+        # niveles); las reglas nuevas se prueban en test_scan_niveles.py
+        "devig_method": "multiplicativo",
+        "max_days_ahead": 30,
+        "longshot_odds": 100.0,
     }
     values.update(overrides)
     return Settings(_env_file=None, **values)  # type: ignore[arg-type]

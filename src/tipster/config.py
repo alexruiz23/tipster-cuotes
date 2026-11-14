@@ -62,7 +62,9 @@ class Settings(BaseSettings):
         "betfair_sb_uk",
     )
     reference_order: CommaList = ("pinnacle", "betfair_ex_no_es")
-    devig_method: DevigMethod = DevigMethod.MULTIPLICATIVE  # provisional (F2 lo decidirá)
+    # Shin desde el 2026-11-14 (antes multiplicativo): corrige el sesgo favorito-longshot que infla
+    # el EV de las cuotas largas; en validación empató en log-loss con los demás (ADR 014)
+    devig_method: DevigMethod = DevigMethod.SHIN
     ev_min: float = 0.03
     error_margin: float = 0.15
     max_quote_age_minutes: PositiveInt = 10
@@ -84,6 +86,14 @@ class Settings(BaseSettings):
     # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado. 8,0 desde el
     # 2026-11-14 (antes 15,0): ver «Cambio del 2026-11-14» en el ADR 012
     max_odds: float = Field(default=8.0, gt=1)
+    # Dos niveles (ADR 014). Principal: cuota ≤ longshot_odds con EV ≥ ev_min. Improbable: cuota
+    # mayor, hasta max_odds, que exige EV ≥ longshot_ev_min y con un tope de picks abiertos a la vez
+    longshot_odds: float = Field(default=4.0, gt=1)
+    longshot_ev_min: float = Field(default=0.06, ge=0)
+    max_open_longshots: NonNegativeInt = 2
+    # Solo llevan stake los partidos que empiezan en los próximos N días: a más distancia las
+    # líneas son menos firmes y la cuota de la casa puede estar sin actualizar (ADR 014)
+    max_days_ahead: PositiveInt = 4
     min_odds: float = Field(default=1.5, gt=1)
     min_stake: float = Field(default=0.005, ge=0, lt=1)  # fracción del bankroll: 0,50 € con 100 €
     closing_window_minutes: PositiveInt = 15  # `tipster close` captura a ≤ N min del inicio

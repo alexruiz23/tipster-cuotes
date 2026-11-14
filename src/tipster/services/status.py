@@ -1,7 +1,7 @@
 """Estado del paper trading de un vistazo (ADR 012): bankroll, picks abiertos, ROI y CLV."""
 
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
@@ -32,6 +32,8 @@ class PaperStatus:
     stake_picks: int = 0  # picks con stake (no nulos)
     clv_taken: ClvSummary | None = None  # CLV con la cuota real
     clv_feed_same: float | None = None  # CLV medio del feed en esos mismos picks
+    # CLV medio por nivel y por casa: {"nivel": [(nombre, n, media)], "casa": [...]}
+    clv_groups: dict[str, list[tuple[str, int, float]]] = field(default_factory=dict)
 
     @property
     def settled(self) -> int:
@@ -42,7 +44,9 @@ class PaperStatus:
         return self.profit / self.staked_settled if self.staked_settled > 0 else None
 
 
-def paper_status(conn: sqlite3.Connection, now: datetime | None = None) -> PaperStatus:
+def paper_status(
+    conn: sqlite3.Connection, now: datetime | None = None, longshot_odds: float = 4.0
+) -> PaperStatus:
     now = now or datetime.now(UTC)
 
     def one(sql: str) -> tuple[float, ...]:
@@ -95,6 +99,7 @@ def paper_status(conn: sqlite3.Connection, now: datetime | None = None) -> Paper
         stake_picks=stake_picks,
         clv_taken=summarize_clv([(c, s) for c, _, s in taken]) if taken else None,
         clv_feed_same=sum(f for _, f, _ in taken) / len(taken) if taken else None,
+        clv_groups=SqliteTrackingRepository(conn).clv_breakdown(longshot_odds),
     )
 
 
@@ -128,6 +133,11 @@ def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
                 f"  Muestra insuficiente: {st.clv.n} < {MIN_CLV_SAMPLE} picks con CLV; "
                 "la media aún no dice nada."
             )
+    for key, title in (("nivel", "CLV por nivel"), ("casa", "CLV por casa")):
+        groups = st.clv_groups.get(key, [])
+        if groups:
+            parts = " · ".join(f"{name} {mean * 100:+.1f} % ({n})" for name, n, mean in groups)
+            lines.append(f"{title}: {parts}")
     if st.taken_picks:  # opcional: sin cuotas reales registradas no se dice nada
         lines.append(f"Cuota real registrada: {st.taken_picks} de {st.stake_picks} picks con stake")
     if st.clv_taken is not None and st.clv_taken.mean is not None:

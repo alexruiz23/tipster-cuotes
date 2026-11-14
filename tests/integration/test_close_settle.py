@@ -104,7 +104,8 @@ def _close(conn: sqlite3.Connection, provider: FakeOdds, **settings: object):  #
         provider=provider,
         tracking=SqliteTrackingRepository(conn),
         runs=SqliteRunRepository(conn, clock),
-        settings=Settings(_env_file=None, **settings),  # type: ignore[arg-type]
+        # los CLV a mano de estos tests usan devig multiplicativo (el de por defecto es Shin)
+        settings=Settings(_env_file=None, **{"devig_method": "multiplicativo", **settings}),  # type: ignore[arg-type]
         clock=clock,
     )
     return service.run()

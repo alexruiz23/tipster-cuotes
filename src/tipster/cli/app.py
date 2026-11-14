@@ -561,7 +561,7 @@ def status_command(
     conn = connect(db or settings.db_path)
     try:
         SqliteBankrollRepository(conn, _now).ensure_initial(settings.bankroll_initial)
-        st = paper_status(conn, _now())
+        st = paper_status(conn, _now(), settings.longshot_odds)
     finally:
         conn.close()
     for line in status_lines(st, ZoneInfo(settings.timezone)):
@@ -605,7 +605,12 @@ def notify_command(
         if settle:
             texts.append((settled_text(conn, tz, _now(), bankroll.balance()), []))
         if status:
-            texts.append(("\n".join(status_lines(paper_status(conn, _now()), tz)), []))
+            texts.append(
+                (
+                    "\n".join(status_lines(paper_status(conn, _now(), settings.longshot_odds), tz)),
+                    [],
+                )
+            )
         if alert:
             fresh = unsent(conn, alerts(conn, tz, _now(), low_credits=settings.low_credits_alert))
             texts.append((alerts_text(fresh) if fresh else None, fresh))
