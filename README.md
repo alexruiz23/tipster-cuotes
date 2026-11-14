@@ -166,7 +166,7 @@ Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones
 | Trabajo | Cuándo (cron en UTC) | Notas |
 |---|---|---|
 | `scan` | martes y viernes, a las 12:00 de Madrid | ~14 créditos; `scripts/due.sh` ajusta invierno y verano |
-| `settle` | a diario, hacia las 04:00 de Madrid | solo si hay picks abiertos de entre 2 h y 3 días atrás |
+| `settle` | una vez al día, en el primer disparo que llegue (sin franja horaria) | solo si hay picks abiertos de entre 2 h y 3 días atrás; si falla se reintenta en el siguiente disparo |
 | `close` | cada 15 min, de 11:00 a 22:45 UTC martes, miércoles y viernes a domingo, y de 17:00 a 21:45 UTC los lunes | una captura por pick a 0–15 min del inicio; sin cierre los partidos de jueves. Lo dispara con puntualidad el [Worker de Cloudflare](cloudflare/dispatcher/README.md); el cron de Actions es de respaldo |
 
 - **Cada disparo decide por el estado de la base**, así que si GitHub retrasa o se salta un cron no se pierde trabajo. Los disparos sin tarea duran segundos y no instalan dependencias.
@@ -177,6 +177,7 @@ Desde el 2026-11-11 el bot corre sin depender del Mac ([ADR 013](docs/decisiones
 - **Presupuesto:** ≈ 1 160 min/mes de los 2 000 gratis del repositorio privado; con el límite de gasto en 0 $ los trabajos se detienen al agotarlos. Revisa *Settings → Billing → Usage*.
 - **Aviso:** `close` disparado por el cron de Actions no es puntual (el 12/11 solo llegó 1 de unos 17 disparos, con casi 3 h de retraso): un cierre perdido deja el pick sin CLV. Por eso existe el [Worker de Cloudflare](cloudflare/dispatcher/README.md) (ADR 013); una vez desplegado y comprobado, comenta el cron de `close` en `cron.yml` para no pagar los minutos dos veces.
 - **`take` y `void` desde el móvil:** *Actions → Cron → Run workflow* con `accion = take` (más `pick_id`, `precio` y, si quieres, `casa`) registra la cuota real de un pick; con `accion = void` y `pick_id` anula el de un partido aplazado. El id del pick sale en el aviso de Telegram. Imprime el `status` al terminar.
+- **Picks abiertos por Telegram:** `accion = abiertos` (o `tipster notify --open`) manda la lista de todos los picks abiertos con stake, con fecha y hora de cada partido.
 - **Un scan o settle que falló se reintenta** en el siguiente disparo del día; solo cuenta como hecho si terminó bien.
 - **Comandos que escriben desde el Mac** (`bankroll deposit/withdraw`, `settle --result`, y `take`/`void` si prefieres la terminal): no valen contra la base local, que quedó como copia. Se hacen con `scripts/r2.sh pull`, el comando y `scripts/r2.sh push` (con las variables `R2_BUCKET` y `AWS_*` de R2; hace falta `awscli`).
 

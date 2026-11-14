@@ -39,6 +39,7 @@ from tipster.services.notify import (
     alerts,
     alerts_text,
     mark_sent,
+    open_text,
     picks_text,
     settled_text,
     unsent,
@@ -569,10 +570,13 @@ def status_command(
 
 
 @app.command("notify")
-def notify_command(
+def notify_command(  # noqa: PLR0912, PLR0917 (una opción por tipo de aviso)
     picks: Annotated[bool, typer.Option("--picks", help="Picks del último scan.")] = False,
     settle: Annotated[bool, typer.Option("--settle", help="Liquidados hoy.")] = False,
     status: Annotated[bool, typer.Option("--status", help="Resumen del bankroll.")] = False,
+    open_: Annotated[
+        bool, typer.Option("--open", help="Todos los picks abiertos con stake, por fecha.")
+    ] = False,
     alert: Annotated[
         bool,
         typer.Option(
@@ -583,8 +587,10 @@ def notify_command(
 ) -> None:
     """Envía por Telegram los picks, las liquidaciones o el estado (solo notificaciones)."""
     console = Console()
-    if not (picks or settle or status or alert):
-        console.print("[bold red]Indica qué enviar:[/] --picks, --settle, --status o --alerts.")
+    if not (picks or settle or status or alert or open_):
+        console.print(
+            "[bold red]Indica qué enviar:[/] --picks, --open, --settle, --status o --alerts."
+        )
         raise typer.Exit(EXIT_CONFIG)
     settings = _settings(console, None, None)
     if settings.telegram_bot_token is None or settings.telegram_chat_id is None:
@@ -602,6 +608,8 @@ def notify_command(
         texts: list[tuple[str | None, list[Alert]]] = []
         if picks:
             texts.append((picks_text(conn, tz), []))
+        if open_:
+            texts.append((open_text(conn, tz), []))
         if settle:
             texts.append((settled_text(conn, tz, _now(), bankroll.balance()), []))
         if status:

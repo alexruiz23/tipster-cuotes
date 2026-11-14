@@ -8,10 +8,12 @@ import shutil
 import stat
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
+from tests.integration.test_close_settle import _open
 from tipster.storage.db import connect
 
 DUE = Path(__file__).resolve().parents[2] / "scripts" / "due.sh"
@@ -123,3 +125,44 @@ def test_force_siempre_toca(env: dict[str, str]) -> None:
     _add_run(env, "scan", "ok")
     assert _run(env, "scan", FORCE="scan")
     assert not _run(env, "scan", FORCE="settle")
+
+
+def _pending_pick(env: dict[str, str], hours_ago: float) -> None:
+    conn = connect(env["TIPSTER_DB_PATH"])
+    _open(conn, "e1", minutes_to_kickoff=0)
+    kickoff = datetime.now(UTC) - timedelta(hours=hours_ago)  # due.sh compara con la hora real
+    conn.execute("UPDATE events SET kickoff_utc = ?", (kickoff.isoformat(timespec="seconds"),))
+    conn.commit()
+    conn.close()
+
+
+@pytest.mark.parametrize("hour", ["04", "12", "23"])
+def test_el_settle_toca_a_cualquier_hora_si_hay_picks_por_liquidar(
+    env: dict[str, str], hour: str
+) -> None:
+    _pending_pick(env, hours_ago=5)
+    assert _run(env, "settle", FAKE_HOUR=hour)
+
+
+def test_el_settle_no_toca_sin_picks_ni_con_partidos_recientes_o_muy_viejos(
+    env: dict[str, str],
+) -> None:
+    assert not _run(env, "settle")  # base vacía
+    _pending_pick(env, hours_ago=1)  # empezó hace 1 h: aún no ha terminado
+    assert not _run(env, "settle")
+    conn = connect(env["TIPSTER_DB_PATH"])
+    old = datetime.now(UTC) - timedelta(days=4)  # fuera de los 3 días de /scores
+    conn.execute("UPDATE events SET kickoff_utc = ?", (old.isoformat(timespec="seconds"),))
+    conn.commit()
+    conn.close()
+    assert not _run(env, "settle")
+
+
+def test_el_settle_no_se_repite_si_ya_termino_bien_hoy_y_si_fallo_se_reintenta(
+    env: dict[str, str],
+) -> None:
+    _pending_pick(env, hours_ago=5)
+    _add_run(env, "settle", "error")
+    assert _run(env, "settle")
+    _add_run(env, "settle", "ok")
+    assert not _run(env, "settle")

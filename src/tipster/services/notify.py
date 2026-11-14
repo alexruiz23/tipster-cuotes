@@ -42,6 +42,25 @@ def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
     return "\n".join(lines)
 
 
+def open_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
+    """Todos los picks abiertos con stake, por fecha de partido."""
+    rows = conn.execute(
+        f"SELECT {_PICK_COLS}, p.id {_FROM} WHERE p.stake > 0 AND p.status = 'abierto' "
+        "ORDER BY e.kickoff_utc, p.id"
+    ).fetchall()
+    if not rows:
+        return "No hay picks abiertos con stake."
+    total = sum(r[8] for r in rows)
+    lines = [f"Picks abiertos: {len(rows)} · {total:.2f} € en juego"]
+    for home, away, ko, market, sel, book, price, _, stake, _, _, _, pick_id in rows:
+        when = from_iso(ko).astimezone(tz).strftime("%a %d/%m %H:%M")
+        lines.append(
+            f"#{pick_id} {when} · {home} – {away}\n  {market} {sel} @ {price:g} en {book} · "
+            f"stake {stake:.2f} €"
+        )
+    return "\n".join(lines)
+
+
 def settled_text(
     conn: sqlite3.Connection, tz: ZoneInfo, now: datetime, balance: float
 ) -> str | None:

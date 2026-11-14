@@ -11,7 +11,15 @@ from tests.integration.test_close_settle import NOW, FakeScores, _open, _settle
 from tipster.cli import app as cli
 from tipster.config import Settings
 from tipster.providers.base import MatchScore
-from tipster.services.notify import alerts, alerts_text, mark_sent, picks_text, settled_text, unsent
+from tipster.services.notify import (
+    alerts,
+    alerts_text,
+    mark_sent,
+    open_text,
+    picks_text,
+    settled_text,
+    unsent,
+)
 from tipster.storage.db import connect
 
 TZ = ZoneInfo("Europe/Madrid")
@@ -199,3 +207,29 @@ def test_notify_alerts_envia_y_marca_solo_si_el_envio_sale_bien(
     assert len(sent) == 1 and "Sin CLV" in sent[0][0]
     again = CliRunner().invoke(cli.app, ["notify", "--alerts", "--db", str(db)])
     assert again.exit_code == 0 and len(sent) == 1 and "Nada que enviar" in again.output
+
+
+def test_open_text_lista_todos_los_abiertos_con_stake_por_fecha(db: Path) -> None:
+    conn = connect(db)
+    _open(conn, "tarde", minutes_to_kickoff=900, stake=2.0)
+    _open(conn, "pronto", minutes_to_kickoff=30, stake=1.5)
+    text = open_text(conn, TZ)
+    # e1 (stake 1) viene del fixture; e2 no tiene stake
+    assert text.startswith("Picks abiertos: 3 · 4.50 € en juego")
+    lines = [line for line in text.splitlines() if line.startswith("#")]
+    assert len(lines) == 3 and "07/11" in lines[0]  # el más cercano primero
+    conn.close()
+
+
+def test_open_text_sin_picks() -> None:
+    conn = connect(":memory:")
+    assert open_text(conn, TZ) == "No hay picks abiertos con stake."
+    conn.close()
+
+
+def test_notify_open_envia_la_lista(db: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sent = _sent(monkeypatch)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", "tok")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "1")
+    result = CliRunner().invoke(cli.app, ["notify", "--open", "--db", str(db)])
+    assert result.exit_code == 0 and sent[0][0].startswith("Picks abiertos: 1")

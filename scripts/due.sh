@@ -25,8 +25,9 @@ case "$job" in
   scan) # martes y viernes desde las 12:00 de Madrid, una vez al día
     { [ "$mad_dow" = 2 ] || [ "$mad_dow" = 5 ]; } && [ "$mad_h" -ge 12 ] && [ "$mad_h" -lt 15 ] && ! ran_today scan
     ;;
-  settle) # entre las 04:00 y las 07:00 de Madrid, una vez al día, y solo con picks por liquidar
-    [ "$mad_h" -ge 4 ] && [ "$mad_h" -lt 8 ] && ! ran_today settle && [ "$(q "
+  settle) # una vez al día (UTC), a cualquier hora, y solo con picks por liquidar. Sin franja horaria:
+    # los cron de Actions de madrugada no llegan (ADR 013) y así lo hace el primer disparo del día
+    ! ran_today settle && [ "$(q "
       SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id
       WHERE p.status = 'abierto'
         AND e.kickoff_utc <= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now', '-2 hours')

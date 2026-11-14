@@ -326,3 +326,12 @@ cierre que llega tarde no se captura.
 **Sigue abierto:** con disparo cada 15 min y ventana de 15 min cada pick tiene una sola captura (a 0–15 min del
 inicio); subir `TIPSTER_CLOSING_WINDOW_MINUTES` a 30 daría dos intentos a cambio de un cierre menos cercano.
 
+## Cambio del 2026-11-14: `settle` sin franja horaria
+
+En las madrugadas del 13 y el 14/11 GitHub no lanzó ninguno de los disparos de `settle` (03:00–05:00 UTC); los únicos
+disparos programados de esos dos días llegaron a las 10:44, 17:28, 18:18, 23:44 y 09:58 UTC. Como `due.sh` solo dejaba
+liquidar entre las 04:00 y las 08:00 de Madrid y `/scores` alcanza 3 días, tres madrugadas fallidas habrían dejado picks sin
+liquidar. Ahora `settle` toca **una vez al día (UTC) en el primer disparo que llegue**, de Actions o del Worker, siempre
+que haya picks por liquidar (0 créditos si no los hay). Consecuencia: el aviso de liquidación puede llegar a cualquier
+hora, y un partido que termina después del `settle` del día se liquida al día siguiente. Además, `accion = abiertos`
+manda por Telegram la lista de picks abiertos con fecha y hora (`tipster notify --open`).

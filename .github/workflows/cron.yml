@@ -6,7 +6,7 @@ name: Cron
 on:
   schedule: # UTC; due.sh ajusta a la hora de Madrid, invierno y verano
     - cron: "0 10-12 * * 2,5" # scan: martes y viernes, espera a las 12:00 de Madrid
-    - cron: "0 3-5 * * *" # settle: ~04:00 de Madrid, tres intentos
+    - cron: "0 3-5 * * *" # settle: lo hace el primer disparo del día que llegue (este u otro)
     # close: mar, mié (Champions) y vie-dom, 11:00-22:45 UTC, y los lunes 17:00-21:45 UTC (ADR 013).
     # Los cron de Actions llegan tarde o no llegan: el Worker de cloudflare/dispatcher/ dispara el
     # mismo workflow con puntualidad. Con el Worker verificado, comenta estas dos líneas para no
@@ -16,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       accion:
-        description: "Forzar un trabajo (auto = decide solo; status = solo lee y muestra el estado)"
+        description: "Forzar un trabajo (auto = decide solo; status = muestra el estado; abiertos = manda por Telegram los picks abiertos)"
         type: choice
-        options: [auto, scan, settle, close, status, take, void]
+        options: [auto, scan, settle, close, status, abiertos, take, void]
         default: auto
       pick_id:
         description: "take/void: id del pick (sale en el aviso de Telegram, p. ej. 12)"
@@ -89,7 +89,7 @@ jobs:
           for job in scan settle close; do
             if bash scripts/due.sh "$job"; then echo "$job=1" >> "$GITHUB_OUTPUT"; any=1; fi
           done
-          case "$FORCE" in status|take|void) any=1 ;; esac
+          case "$FORCE" in status|abiertos|take|void) any=1 ;; esac
           echo "any=$any" >> "$GITHUB_OUTPUT"
 
       # Las dependencias solo se instalan si hay trabajo: un disparo ocioso dura segundos
@@ -125,6 +125,7 @@ jobs:
           [ "$DUE_CLOSE" = 1 ] && { bash scripts/close.sh || rc=$?; }
           [ "$DUE_SCAN" = 1 ] && { bash scripts/scan.sh || rc=$?; }
           [ "$FORCE" = status ] && { $PY status || rc=$?; }
+          [ "$FORCE" = abiertos ] && { $PY notify --open || rc=$?; }
           case "$FORCE" in take|void) $PY status || true ;; esac
           exit "$rc"
 
