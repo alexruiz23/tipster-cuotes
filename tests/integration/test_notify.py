@@ -1,5 +1,6 @@
 """`tipster notify`: texto de picks, liquidaciones y estado; envío simulado (sin red)."""
 
+import json
 from datetime import timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -8,18 +9,21 @@ import pytest
 from typer.testing import CliRunner
 
 from tests.integration.test_close_settle import NOW, FakeScores, _open, _settle
+from tests.integration.test_tracking import _make_pick
 from tipster.cli import app as cli
 from tipster.config import Settings
 from tipster.providers.base import MatchScore
 from tipster.services.notify import (
     alerts,
     alerts_text,
+    discards_text,
     mark_sent,
     open_text,
     picks_text,
     settled_text,
     unsent,
 )
+from tipster.services.scan import ALREADY_OPEN, NO_LONGSHOT_ROOM, NO_ROOM, ONE_PER_EVENT
 from tipster.storage.db import connect
 
 TZ = ZoneInfo("Europe/Madrid")
@@ -233,3 +237,72 @@ def test_notify_open_envia_la_lista(db: Path, monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setenv("TELEGRAM_CHAT_ID", "1")
     result = CliRunner().invoke(cli.app, ["notify", "--open", "--db", str(db)])
     assert result.exit_code == 0 and sent[0][0].startswith("Picks abiertos: 1")
+
+
+def _scan_con_descartes(conn, reasons: list[tuple[str, float | None]]) -> int:  # type: ignore[no-untyped-def]
+    """Un scan con un VALUE por cada (último motivo, stake). Devuelve el id de la ejecución."""
+    run = 0
+    for i, (reason, stake) in enumerate(reasons):
+        _, quote_id, run = _make_pick(conn, f"d{i}")  # cada _make_pick abre su propio scan
+        conn.execute(
+            "UPDATE picks SET stake = ?, reasons_json = ? WHERE quote_id = ?",
+            (stake, json.dumps(["EV +5 %", reason]), quote_id),
+        )
+    conn.execute("UPDATE picks SET run_id = ?", (run,))  # todos en el último scan
+    return run
+
+
+def test_el_resumen_agrupa_los_valor_sin_stake_por_motivo(db: Path) -> None:
+    conn = connect(":memory:")
+    run = _scan_con_descartes(
+        conn,
+        [
+            ("el partido empieza a más de 4 días (se evaluará en un scan posterior)", 0.0),
+            ("el partido empieza a más de 4 días (se evaluará en un scan posterior)", 0.0),
+            (NO_LONGSHOT_ROOM, 0.0),
+            ("cuota 5 improbable (> 4): exige EV de 6% y tiene 4.5%", 0.0),
+            ("cuota 12 por encima de max_odds 8 (sesgo favorito-longshot)", None),
+            ("stake 0.96 (flat, 5.0% del bankroll diario)", 0.96),  # con stake: no cuenta
+        ],
+    )
+    text = discards_text(conn, run)
+    assert text.startswith("5 con valor sin stake: 2 a más de 4 días")
+    for part in (
+        "1 sin hueco de improbables",
+        "1 improbables sin el EV exigido",
+        "1 cuota demasiado alta",
+    ):
+        assert part in text
+    conn.close()
+
+
+def test_picks_text_sin_stake_explica_por_que(db: Path) -> None:
+    conn = connect(":memory:")
+    _scan_con_descartes(conn, [(NO_ROOM, 0.0), (NO_ROOM, 0.0), (ALREADY_OPEN, 0.0)])
+    text = picks_text(conn, TZ)
+    assert text == (
+        "Último scan: sin picks con stake.\n3 con valor sin stake: 2 tope diario de exposición"
+        " · 1 partido con pick ya abierto"
+    )
+    conn.close()
+
+
+def test_picks_text_con_stake_tambien_resume_los_descartes() -> None:
+    conn = connect(":memory:")
+    _scan_con_descartes(conn, [("stake 0.96 (flat)", 0.96), (ONE_PER_EVENT, 0.0)])
+    text = picks_text(conn, TZ)
+    assert text.startswith("Último scan: 1 picks con stake")
+    assert text.endswith("1 con valor sin stake: 1 otro pick del partido con más EV")
+    conn.close()
+
+
+def test_sin_oportunidades_no_se_anade_resumen() -> None:
+    conn = connect(":memory:")
+    assert discards_text(conn, None) == ""
+    run = conn.execute(
+        "INSERT INTO runs (command, started_at, status, settings_json)"
+        " VALUES ('scan', '2026-11-17T10:00:00+00:00', 'ok', '{}')"
+    ).lastrowid
+    assert discards_text(conn, run) == ""
+    assert picks_text(conn, TZ) == "Último scan: sin picks con stake."
+    conn.close()

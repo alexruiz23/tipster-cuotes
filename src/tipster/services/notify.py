@@ -1,9 +1,19 @@
 """Textos de las notificaciones de Telegram (`tipster notify`)."""
 
+import json
+import re
 import sqlite3
+from collections import Counter
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from tipster.services.scan import (
+    ALREADY_OPEN,
+    LOSS_LIMIT,
+    NO_LONGSHOT_ROOM,
+    NO_ROOM,
+    ONE_PER_EVENT,
+)
 from tipster.storage.db import from_iso, iso
 
 CLOSE_GRACE = timedelta(minutes=5)  # tras el inicio, `close` ya no puede capturar
@@ -17,8 +27,53 @@ _FROM = """
     FROM picks p JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id"""
 
 
+_DISCARD_EXACT = {
+    NO_LONGSHOT_ROOM: "sin hueco de improbables",
+    ONE_PER_EVENT: "otro pick del partido con más EV",
+    ALREADY_OPEN: "partido con pick ya abierto",
+    LOSS_LIMIT: "límite de pérdida diaria",
+    NO_ROOM: "tope diario de exposición",
+}
+_DISCARD_CONTAINS = (
+    ("exige EV", "improbables sin el EV exigido"),
+    ("por encima de max_odds", "cuota demasiado alta"),
+    ("por debajo de min_odds", "cuota demasiado baja"),
+    ("por debajo del mínimo", "stake bajo el mínimo"),
+)
+
+
+def _discard_label(reason: str) -> str:
+    """Motivo corto, para el resumen, de por qué un VALUE no llevó stake."""
+    if m := re.search(r"a más de (\d+) días", reason):
+        return f"a más de {m.group(1)} días"
+    if reason in _DISCARD_EXACT:
+        return _DISCARD_EXACT[reason]
+    for needle, label in _DISCARD_CONTAINS:
+        if needle in reason:
+            return label
+    return "otros motivos"
+
+
+def discards_text(conn: sqlite3.Connection, run: int | None) -> str:
+    """Resumen de los VALUE del scan que se quedaron sin stake y por qué (vacío si no hubo)."""
+    if run is None:
+        return ""
+    rows = conn.execute(
+        "SELECT reasons_json FROM picks WHERE run_id = ? AND label = 'VALUE'"
+        " AND (stake IS NULL OR stake = 0)",
+        (run,),
+    ).fetchall()
+    if not rows:
+        return ""
+    reasons = Counter(
+        _discard_label((json.loads(r[0]) or [""])[-1]) for r in rows
+    )  # el último motivo es el de la decisión de stake
+    detail = " · ".join(f"{n} {label}" for label, n in reasons.most_common())
+    return f"{len(rows)} con valor sin stake: {detail}"
+
+
 def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
-    """Picks con stake del último scan que siguen abiertos."""
+    """Picks con stake del último scan que siguen abiertos, y por qué no hay más."""
     run = conn.execute("SELECT MAX(id) FROM runs WHERE command = 'scan'").fetchone()[0]
     rows = (
         conn.execute(
@@ -29,8 +84,9 @@ def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
         if run is not None
         else []
     )
+    discards = discards_text(conn, run)
     if not rows:
-        return "Último scan: sin picks con stake."
+        return "Último scan: sin picks con stake." + (f"\n{discards}" if discards else "")
     lines = [f"Último scan: {len(rows)} picks con stake"]
     for home, away, ko, market, sel, book, price, ev, stake, feed_es, _, _, pick_id in rows:
         when = from_iso(ko).astimezone(tz).strftime("%d/%m %H:%M")
@@ -39,6 +95,8 @@ def picks_text(conn: sqlite3.Connection, tz: ZoneInfo) -> str:
             f"#{pick_id} {home} – {away} ({when})\n  {market} {sel} @ {price:g} en {book} · "
             f"EV {ev * 100:+.1f} % · stake {stake:.2f} €{warn}"
         )
+    if discards:
+        lines.append(discards)
     return "\n".join(lines)
 
 
