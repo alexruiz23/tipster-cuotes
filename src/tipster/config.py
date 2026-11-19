@@ -90,7 +90,7 @@ class Settings(BaseSettings):
     # mayor, hasta max_odds, que exige EV ≥ longshot_ev_min y con un tope de picks abiertos a la vez
     longshot_odds: float = Field(default=4.0, gt=1)
     longshot_ev_min: float = Field(default=0.06, ge=0)
-    max_open_longshots: NonNegativeInt = 2
+    max_open_longshots: NonNegativeInt = 1  # 2 hasta el 2026-11-19 (BACKLOG 54)
     # Solo llevan stake los partidos que empiezan en los próximos N días: a más distancia las
     # líneas son menos firmes y la cuota de la casa puede estar sin actualizar (ADR 014)
     max_days_ahead: PositiveInt = 4

@@ -31,7 +31,7 @@ def test_valores_por_defecto(monkeypatch: pytest.MonkeyPatch) -> None:
     assert s.markets == ("1x2", "ou_2.5")
     assert s.reference_order == ("pinnacle", "betfair_ex_no_es")
     assert s.devig_method is DevigMethod.SHIN
-    assert (s.longshot_odds, s.longshot_ev_min, s.max_open_longshots) == (4.0, 0.06, 2)
+    assert (s.longshot_odds, s.longshot_ev_min, s.max_open_longshots) == (4.0, 0.06, 1)
     assert (s.max_odds, s.max_days_ahead) == (8.0, 4)
     t = s.thresholds()
     assert (t.ev_min, t.error_margin, t.max_quote_age) == (0.03, 0.15, timedelta(minutes=10))

@@ -29,6 +29,7 @@ def conn() -> Iterator[sqlite3.Connection]:
 
 
 def _svc(conn: sqlite3.Connection, **overrides: object) -> ScanService:
+    overrides = {"max_open_longshots": 2, **overrides}  # el valor por defecto es 1 desde el 19/11
     settings = Settings(_env_file=None, ODDS_API_KEY=KEY, **overrides)  # type: ignore[arg-type]
     return _service(conn, TheOddsApiProvider(OfflineFetcher(FIXTURES)), settings, now=NOW)
 
@@ -93,6 +94,14 @@ def test_solo_caben_dos_improbables_y_entran_los_de_mas_ev(conn: sqlite3.Connect
     picks, (blocked, best, no_slot) = _select(_svc(conn), opps)
     assert all(v is None for v in blocked.values()) and len(best) == 4
     assert no_slot == {picks[0].quote_id}  # el de menos EV de los tres improbables
+
+
+def test_por_defecto_solo_cabe_un_improbable(conn: sqlite3.Connection) -> None:
+    opps = [_opp(5.0, 0.07, "a"), _opp(6.0, 0.12, "b")]
+    settings = Settings(_env_file=None, ODDS_API_KEY=KEY)
+    service = _service(conn, TheOddsApiProvider(OfflineFetcher(FIXTURES)), settings, now=NOW)
+    _, (_, best, no_slot) = _select(service, opps)
+    assert len(best) == 2 and len(no_slot) == 1
 
 
 def test_los_improbables_ya_abiertos_consumen_hueco(conn: sqlite3.Connection) -> None:
