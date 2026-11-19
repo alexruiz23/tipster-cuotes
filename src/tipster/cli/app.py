@@ -569,6 +569,48 @@ def status_command(
         console.print(line, markup=False)
 
 
+@app.command("backtest")
+def backtest_command(
+    data_dir: Annotated[Path, typer.Option("--data-dir", help="CSV de football-data.")] = Path(
+        "data/football-data"
+    ),
+    download: Annotated[bool, typer.Option("--download", help="Baja los CSV que falten.")] = False,
+    first_year: Annotated[int, typer.Option(help="Primera temporada (año de inicio).")] = 2012,
+) -> None:
+    """Simula la estrategia con football-data.co.uk y barre umbrales (sin gastar créditos)."""
+    import httpx  # noqa: PLC0415
+
+    from tipster.backtest.football_data import download as fetch_csvs  # noqa: PLC0415
+    from tipster.backtest.football_data import load_dir  # noqa: PLC0415
+    from tipster.backtest.simulate import Strategy  # noqa: PLC0415
+    from tipster.backtest.sweep import report  # noqa: PLC0415
+
+    console = Console()
+    settings = _settings(console, None, None)
+    if download:
+
+        def fetch(url: str) -> bytes | None:
+            reply = httpx.get(url, timeout=30, follow_redirects=True)
+            return reply.content if reply.status_code == httpx.codes.OK else None
+
+        now = _now()
+        last = now.year if now.month >= 7 else now.year - 1
+        got, cached = fetch_csvs(data_dir, first_year, last, fetch)
+        console.print(f"CSV descargados: {got} · ya en caché: {cached}", markup=False)
+    if not data_dir.is_dir():
+        console.print("No hay datos: usa --download.", markup=False)
+        raise typer.Exit(1)
+    matches, loaded = load_dir(data_dir)
+    current = Strategy(
+        longshot_odds=settings.longshot_odds,
+        ev_min=settings.ev_min,
+        longshot_ev_min=settings.longshot_ev_min,
+        max_odds=settings.max_odds,
+        max_open_longshots=settings.max_open_longshots,
+    )
+    console.print(report(matches, loaded, current), markup=False)
+
+
 @app.command("notify")
 def notify_command(  # noqa: PLR0912, PLR0917 (una opción por tipo de aviso)
     picks: Annotated[bool, typer.Option("--picks", help="Picks del último scan.")] = False,
