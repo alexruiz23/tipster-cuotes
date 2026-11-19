@@ -44,6 +44,14 @@ def test_lee_columnas_con_alias_y_descarta_sin_cierre(tmp_path: Path) -> None:
     assert matches[0].taken["b365"] == (2.1, 3.4, 4.0)
 
 
+def test_descarta_pinnacle_con_margen_negativo(tmp_path: Path) -> None:
+    cols = "PSH,PSD,PSA,PSCH,PSCD,PSCA,B365H,B365D,B365A"
+    path = _csv(tmp_path, "2526", cols, ["E0,16/08/2025,A,B,H,3,4,4,2,3.5,4,2,3.5,4"])
+    report = LoadReport()
+    assert read_csv(path, "premier", "2526", report) == []
+    assert report.dropped == {"Pinnacle con margen negativo": 1}
+
+
 def test_fecha_con_anio_de_dos_cifras(tmp_path: Path) -> None:
     cols = "PSH,PSD,PSA,PSCH,PSCD,PSCA,B365H,B365D,B365A"
     path = _csv(tmp_path, "1213", cols, ["E0,16/08/13,A,B,H,2,3.5,4,2,3.5,4,2,3.5,4"])

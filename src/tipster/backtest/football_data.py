@@ -102,6 +102,9 @@ def read_csv(path: Path, league: str, season: str, report: LoadReport) -> list[M
             if ps_close is None:
                 report.drop("sin Pinnacle de cierre")
                 continue
+            if any(sum(1 / x for x in t) < 1.0 for t in (ps_open, ps_close)):
+                report.drop("Pinnacle con margen negativo")  # dato erróneo: no se puede desvigar
+                continue
             taken = {
                 k: t for k in ("b365", "avg", "max") if (t := _triple(row, _COLUMNS[k])) is not None
             }

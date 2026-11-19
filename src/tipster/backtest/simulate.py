@@ -9,9 +9,16 @@ import math
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import cache
 
 from tipster.backtest.football_data import Match
 from tipster.pricing.devig import devig_shin
+
+
+@cache
+def _shin(odds: tuple[float, float, float]) -> tuple[float, ...]:
+    """El barrido repite miles de veces el mismo partido: el devig se calcula una sola vez."""
+    return devig_shin(odds)
 
 
 @dataclass(frozen=True)
@@ -53,8 +60,8 @@ def _candidate(m: Match, s: Strategy) -> Bet | None:
     prices = m.taken.get(s.book)
     if prices is None:
         return None
-    fair = devig_shin(m.ps_open)
-    fair_close = devig_shin(m.ps_close)
+    fair = _shin(m.ps_open)
+    fair_close = _shin(m.ps_close)
     best: Bet | None = None
     for i, price in enumerate(prices):
         if not s.min_odds <= price <= s.max_odds:
