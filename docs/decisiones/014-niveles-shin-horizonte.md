@@ -32,7 +32,7 @@ Tres causas en el diseño:
 |---|---|---|
 | `devig_method` | multiplicativo | **shin** (también en el CLV de `close`) |
 | Nivel principal | — | cuota 1,5–4,0 (`longshot_odds`), EV ≥ 3 % (`ev_min`) |
-| Nivel improbable | — | cuota > 4,0 y ≤ 8,0 (`max_odds`), EV ≥ 6 % (`longshot_ev_min`), como mucho 2 abiertos a la vez (`max_open_longshots`) |
+| Nivel improbable | — | cuota > 4,0 y ≤ 8,0 (`max_odds`), EV ≥ 6 % (`longshot_ev_min`), como mucho 1 abierto a la vez (`max_open_longshots`; eran 2 hasta el 19/11/2026, ver BACKLOG 54) |
 | `max_days_ahead` | sin límite | **4 días** |
 
 - Un VALUE que no cumple se sigue mostrando, sin stake y con el motivo escrito; y no compite por el stake de su partido.
