@@ -51,7 +51,9 @@ def odds_probe() -> None:
 
 
 def af_probe() -> None:
-    key = os.environ["API_FOOTBALL_KEY"]
+    key = os.environ.get("API_FOOTBALL_KEY", "")
+    print(f"\nAPI_FOOTBALL_KEY llega al workflow: {'sí' if key else 'NO (vacío)'}; longitud {len(key)}; espacios/saltos en los bordes: {key != key.strip()}")
+    key = key.strip()
     h = {"x-apisports-key": key}
     st, d, hdr = get(f"{AF}/status", h)
     if isinstance(d, dict):
