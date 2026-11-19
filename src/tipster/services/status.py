@@ -34,6 +34,7 @@ class PaperStatus:
     clv_feed_same: float | None = None  # CLV medio del feed en esos mismos picks
     # CLV medio por nivel y por casa: {"nivel": [(nombre, n, media)], "casa": [...]}
     clv_groups: dict[str, list[tuple[str, int, float]]] = field(default_factory=dict)
+    credits_remaining: int | None = None  # últimos créditos de The Odds API conocidos
 
     @property
     def settled(self) -> int:
@@ -100,7 +101,16 @@ def paper_status(
         clv_taken=summarize_clv([(c, s) for c, _, s in taken]) if taken else None,
         clv_feed_same=sum(f for _, f, _ in taken) / len(taken) if taken else None,
         clv_groups=SqliteTrackingRepository(conn).clv_breakdown(longshot_odds),
+        credits_remaining=_credits_left(conn),
     )
+
+
+def _credits_left(conn: sqlite3.Connection) -> int | None:
+    row = conn.execute(
+        "SELECT credits_remaining FROM provider_requests WHERE credits_remaining IS NOT NULL "
+        "AND from_cache = 0 ORDER BY id DESC LIMIT 1"
+    ).fetchone()
+    return None if row is None else int(row[0])
 
 
 def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
@@ -115,6 +125,8 @@ def status_lines(st: PaperStatus, tz: ZoneInfo) -> list[str]:
         f"Liquidados: {st.settled} (ganados {st.won} · perdidos {st.lost} · nulos {st.void})",
         f"ROI:        {roi}",
     ]
+    if st.credits_remaining is not None:
+        lines.append(f"Créditos The Odds API restantes: {st.credits_remaining}")
     if st.settled < MIN_SAMPLE:
         lines.append(
             f"  Muestra insuficiente: {st.settled} < {MIN_SAMPLE} picks; el ROI aún no dice nada."
