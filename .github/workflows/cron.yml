@@ -7,12 +7,12 @@ on:
   schedule: # UTC; due.sh ajusta a la hora de Madrid, invierno y verano
     - cron: "0 10-12 * * 2,5" # scan: martes y viernes, espera a las 12:00 de Madrid
     - cron: "0 3-5 * * *" # settle: lo hace el primer disparo del día que llegue (este u otro)
-    # close: mar, mié (Champions) y vie-dom, 11:00-22:45 UTC, y los lunes 17:00-21:45 UTC (ADR 013).
-    # Los cron de Actions llegan tarde o no llegan: el Worker de cloudflare/dispatcher/ dispara el
-    # mismo workflow con puntualidad. Con el Worker verificado, comenta estas dos líneas para no
-    # pagar los minutos dos veces (ver cloudflare/dispatcher/README.md).
-    - cron: "*/15 11-22 * * 0,2,3,5,6"
-    - cron: "*/15 17-21 * * 1"
+    # close: desde el 2026-11-20 lo dispara el Worker de cloudflare/dispatcher/ (puntual, cada 15 min
+    # en las franjas de partido; llega como workflow_dispatch). Estas dos líneas quedan comentadas
+    # para no pagar los minutos dos veces; si el Worker se para, descomenta y vuelve a depender de
+    # los cron de Actions (que llegan tarde o no llegan).
+    # - cron: "*/15 11-22 * * 0,2,3,5,6"
+    # - cron: "*/15 17-21 * * 1"
   workflow_dispatch:
     inputs:
       accion:
