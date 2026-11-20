@@ -8,7 +8,8 @@ workers_dev = false # sin URL pública: solo se ejecuta por cron
 
 [triggers]
 # UTC. Mismas franjas que el `close` de .github/workflows/cron.yml (ver README: no dejes los dos activos)
-crons = ["*/15 11-22 * * 0,2,3,5,6", "*/15 17-21 * * 1"]
+# Cloudflare numera los días de 1 (domingo) a 7 (sábado) y rechaza el 0: por eso van los nombres.
+crons = ["*/15 11-22 * * SUN,TUE,WED,FRI,SAT", "*/15 17-21 * * MON"]
 
 [vars]
 GITHUB_REPO = "alexruiz23/tipster-cuotes"

@@ -5,7 +5,7 @@ llegan (el 12/11/2026 solo se ejecutó 1 de unos 17 disparos programados, uno co
 `close` que llega tarde pierde el cierre del pick y, con él, su CLV. Un Cron Trigger de Cloudflare es
 puntual y gratis. [ADR 013](../../docs/decisiones/013-nube-github-actions-r2.md).
 
-Cada 15 minutos, en las franjas de partidos (`*/15 11-22 * * 0,2,3,5,6` y `*/15 17-21 * * 1`, UTC), hace
+Cada 15 minutos, en las franjas de partidos (`*/15 11-22 * * SUN,TUE,WED,FRI,SAT` y `*/15 17-21 * * MON`, UTC; Cloudflare no acepta el 0 de domingo y numera 1–7, por eso se usan los nombres), hace
 un `POST` a la API de GitHub (`workflow_dispatch`, `accion=auto`). El workflow decide por el estado de la
 base qué toca; el Worker no sabe nada de picks, ni guarda nada, ni tiene URL pública.
 
