@@ -11,8 +11,14 @@ DB="${TIPSTER_DB_PATH:-data/tipster.sqlite}"
 S="$(dirname "$DB")/.r2" # estado entre pull y push: .etag, .sha, .counts, .err
 s3api() { aws s3api "$1" --bucket "$R2_BUCKET" "${@:2}"; } # s3api <subcomando> [opciones]
 
-counts() { sqlite3 -separator ' ' "$DB" 'SELECT (SELECT COUNT(*) FROM picks), (SELECT COUNT(*) FROM bankroll_entries)'; }
+# Tablas que solo crecen: picks, movimientos de bankroll, ejecuciones y peticiones a proveedores
+counts() {
+  sqlite3 -separator ' ' "$DB" 'SELECT (SELECT COUNT(*) FROM picks), (SELECT COUNT(*) FROM bankroll_entries), (SELECT COUNT(*) FROM runs), (SELECT COUNT(*) FROM provider_requests)'
+}
 healthy() { [ "$(sqlite3 "$DB" 'PRAGMA integrity_check')" = ok ]; }
+# Filas que apuntan a otra que no existe. Si la base ya trae alguna, no se bloquea: solo se exige
+# que la ejecución no añada más (bloquear por un fallo viejo pararía todo el sistema).
+fk_broken() { sqlite3 "$DB" 'PRAGMA foreign_key_check' | wc -l | tr -d ' '; }
 
 pull() {
   mkdir -p "$(dirname "$DB")"
@@ -21,7 +27,9 @@ pull() {
     healthy || { echo "::error::La base descargada de R2 no pasa integrity_check"; exit 1; }
     sha256sum "$DB" 2>/dev/null | cut -d' ' -f1 >"$S.sha" || shasum -a 256 "$DB" | cut -d' ' -f1 >"$S.sha"
     counts >"$S.counts"
+    fk_broken >"$S.fk"
     echo "R2 -> $DB ($(cut -d' ' -f1 "$S.counts") picks, $(cut -d' ' -f2 "$S.counts") movimientos de bankroll)"
+    [ "$(cat "$S.fk")" = 0 ] || echo "::warning::La base de R2 ya trae $(cat "$S.fk") filas con claves foráneas rotas"
   elif grep -qE 'NoSuchKey|Not Found|404' "$S.err" && [ "${R2_BOOTSTRAP:-0}" = 1 ]; then
     : >"$S.etag" # la primera subida será «solo si sigue sin existir»
     echo "R2 no tiene $KEY: se creará una base nueva (bootstrap)"
@@ -40,11 +48,19 @@ push() {
   now="$(sha256sum "$DB" 2>/dev/null | cut -d' ' -f1 || shasum -a 256 "$DB" | cut -d' ' -f1)"
   if [ "$now" = "$(cat "$S.sha" 2>/dev/null || true)" ]; then echo "base sin cambios: no se sube"; exit 0; fi
   # la base nunca puede encoger: protege contra subir una base vacía o truncada
-  local picks bank picks0 bank0
-  read -r picks bank < <(counts)
-  read -r picks0 bank0 < <(cat "$S.counts" 2>/dev/null || echo "0 0")
-  if [ "$picks" -lt "$picks0" ] || [ "$bank" -lt "$bank0" ]; then
-    echo "::error::La base local tiene menos filas que la descargada (picks $picks<$picks0 o bankroll $bank<$bank0): no se sube"
+  local picks bank runs reqs picks0 bank0 runs0 reqs0
+  read -r picks bank runs reqs < <(counts)
+  read -r picks0 bank0 runs0 reqs0 < <(cat "$S.counts" 2>/dev/null || echo "0 0 0 0")
+  if [ "$picks" -lt "$picks0" ] || [ "$bank" -lt "$bank0" ] || [ "$runs" -lt "${runs0:-0}" ] ||
+    [ "$reqs" -lt "${reqs0:-0}" ]; then
+    echo "::error::La base local tiene menos filas que la descargada (picks $picks/$picks0, bankroll $bank/$bank0, ejecuciones $runs/${runs0:-0}, peticiones $reqs/${reqs0:-0}): no se sube"
+    exit 1
+  fi
+  local fk fk0
+  fk="$(fk_broken)"
+  fk0="$(cat "$S.fk" 2>/dev/null || echo 0)"
+  if [ "$fk" -gt "$fk0" ]; then
+    echo "::error::La ejecución ha dejado filas con claves foráneas rotas ($fk, antes $fk0): no se sube"
     exit 1
   fi
   local etag cond
