@@ -1,5 +1,3 @@
-import pytest
-
 from tipster.tracking.bootstrap import block_bootstrap_ci
 
 
