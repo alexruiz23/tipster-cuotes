@@ -4,14 +4,23 @@ Cada scan guarda en `runs.settings_json` la configuración completa con la que c
 apunta a su scan: esa es la referencia inmutable. La versión es un hash de las claves que deciden
 qué se apuesta y cuánto; las operativas (rutas, caché, ventanas de cierre, backups…) no cuentan.
 Una clave nueva en la configuración crea una versión nueva: mejor separar de más que mezclar.
+
+`strategy_logic_version` (config.py) añade la versión de la lógica en Python: los scans anteriores
+a que existiera la clave cuentan como lógica 1. `bankroll_initial` no cuenta: solo siembra una base
+vacía (`ensure_initial`); el stake sale del saldo real, no de ese parámetro.
+
+El intervalo del CLV es un bootstrap por semanas de partido (tracking/bootstrap.py), igual que en
+el backtest; con menos de 4 semanas no se da.
 """
 
 import hashlib
 import json
-import math
 import sqlite3
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
+
+from tipster.tracking.bootstrap import MIN_BLOCKS, block_bootstrap_ci
 
 OPERATIONAL = frozenset(
     {
@@ -29,11 +38,13 @@ OPERATIONAL = frozenset(
         "timezone",
     }
 )
-Z95 = 1.96
+BASELINE_LOGIC = 1  # la lógica de los scans guardados antes de existir la clave
 
 
 def strategy_part(snapshot: Mapping[str, object]) -> dict[str, object]:
-    return {k: v for k, v in snapshot.items() if k not in OPERATIONAL}
+    part = {k: v for k, v in snapshot.items() if k not in OPERATIONAL}
+    part.setdefault("strategy_logic_version", BASELINE_LOGIC)
+    return part
 
 
 def strategy_hash(snapshot: Mapping[str, object]) -> str:
@@ -51,23 +62,23 @@ class VersionStats:
     changes: list[str] = field(default_factory=list)
     detected: int = 0
     staked: int = 0
-    clv: list[float] = field(default_factory=list)  # con stake y cierre fiable, abierto o no
-    clv_taken: list[float] = field(default_factory=list)
+    # CLV por semana ISO del partido: con stake y cierre fiable, abierto o no
+    clv_weeks: dict[tuple[int, int], list[float]] = field(default_factory=dict)
+    taken_weeks: dict[tuple[int, int], list[float]] = field(default_factory=dict)
     settled_stake: float = 0.0
     settled_profit: float = 0.0
 
     @property
+    def clv(self) -> list[float]:
+        return [x for week in self.clv_weeks.values() for x in week]
+
+    @property
+    def clv_taken(self) -> list[float]:
+        return [x for week in self.taken_weeks.values() for x in week]
+
+    @property
     def roi(self) -> float | None:
         return self.settled_profit / self.settled_stake if self.settled_stake > 0 else None
-
-
-def _mean_ci(values: Sequence[float]) -> tuple[float, float, float] | None:
-    n = len(values)
-    if n < 2:
-        return None
-    mean = sum(values) / n
-    se = math.sqrt(sum((x - mean) ** 2 for x in values) / (n - 1) / n)
-    return mean, mean - Z95 * se, mean + Z95 * se
 
 
 def _diff(old: Mapping[str, object], new: Mapping[str, object]) -> list[str]:
@@ -82,11 +93,12 @@ def _diff(old: Mapping[str, object], new: Mapping[str, object]) -> list[str]:
 def version_stats(conn: sqlite3.Connection, current: Mapping[str, object]) -> list[VersionStats]:
     rows = conn.execute(
         "SELECT r.settings_json, r.started_at, p.stake, p.status, p.profit, p.clv,"
-        " p.closing_reliable, p.clv_taken FROM picks p JOIN runs r ON r.id = p.run_id"
-        " ORDER BY r.started_at, p.id"
+        " p.closing_reliable, p.clv_taken, e.kickoff_utc FROM picks p"
+        " JOIN runs r ON r.id = p.run_id JOIN odds_quotes q ON q.id = p.quote_id"
+        " JOIN events e ON e.id = q.event_id ORDER BY r.started_at, p.id"
     ).fetchall()
     versions: dict[str, VersionStats] = {}
-    for settings_json, started, stake, status, profit, clv, reliable, clv_taken in rows:
+    for settings_json, started, stake, status, profit, clv, reliable, clv_taken, kickoff in rows:
         snapshot = json.loads(settings_json)
         key = strategy_hash(snapshot)
         v = versions.setdefault(key, VersionStats(key, started[:10], strategy_part(snapshot)))
@@ -95,9 +107,11 @@ def version_stats(conn: sqlite3.Connection, current: Mapping[str, object]) -> li
             continue
         v.staked += 1
         if reliable == 1 and clv is not None:
-            v.clv.append(float(clv))
+            iso = datetime.fromisoformat(kickoff).isocalendar()
+            week = (iso.year, iso.week)
+            v.clv_weeks.setdefault(week, []).append(float(clv))
             if clv_taken is not None:
-                v.clv_taken.append(float(clv_taken))
+                v.taken_weeks.setdefault(week, []).append(float(clv_taken))
         if status in ("ganado", "perdido") and profit is not None:
             v.settled_stake += float(stake)
             v.settled_profit += float(profit)
@@ -112,17 +126,21 @@ def version_stats(conn: sqlite3.Connection, current: Mapping[str, object]) -> li
     return ordered
 
 
-def _clv_text(values: Sequence[float]) -> str:
+def _clv_text(weeks: Mapping[tuple[int, int], Sequence[float]]) -> str:
+    values = [x for week in weeks.values() for x in week]
     if not values:
         return "sin CLV todavía"
-    stats = _mean_ci(values)
-    if stats is None:
-        return f"CLV {values[0] * 100:+.1f} % (1 pick)"
-    mean, lo, hi = stats
+    mean = sum(values) / len(values)
     positive = sum(x > 0 for x in values)
+    ci = block_bootstrap_ci(list(weeks.values()))
+    interval = (
+        f"IC 95 % por semanas: muestra insuficiente ({len(weeks)} < {MIN_BLOCKS} semanas)"
+        if ci is None
+        else f"IC 95 % por semanas [{ci[0] * 100:+.1f}, {ci[1] * 100:+.1f}]"
+    )
     return (
-        f"CLV {mean * 100:+.1f} % [IC 95 % {lo * 100:+.1f}, {hi * 100:+.1f}] en {len(values)} "
-        f"({positive} > 0, {len(values) - positive} ≤ 0)"
+        f"CLV {mean * 100:+.1f} % en {len(values)} ({positive} > 0, {len(values) - positive} ≤ 0)"
+        f" · {interval}"
     )
 
 
@@ -136,7 +154,7 @@ def version_lines(
         tag = " (vigente)" if v.current else ""
         lines.append(
             f"  {v.label}{tag} desde {v.first_seen} [{v.config_hash}]: {v.detected} detectados · "
-            f"{v.staked} con stake · {_clv_text(v.clv)}{roi}"
+            f"{v.staked} con stake · {_clv_text(v.clv_weeks)}{roi}"
         )
         if v.changes:
             shown = v.changes[:max_changes]
@@ -148,8 +166,8 @@ def version_lines(
         return lines
     lines.append(
         f"Estrategia vigente ({live.label}): {live.detected} detectados · {live.staked} con stake"
-        f" · {len(live.clv)} con cierre fiable · {_clv_text(live.clv)}"
+        f" · {len(live.clv)} con cierre fiable · {_clv_text(live.clv_weeks)}"
     )
     if live.clv_taken:
-        lines.append(f"  con cuota real: {_clv_text(live.clv_taken)}")
+        lines.append(f"  con cuota real: {_clv_text(live.taken_weeks)}")
     return lines

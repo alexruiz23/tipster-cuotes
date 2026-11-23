@@ -30,6 +30,12 @@ from tipster.pricing.devig import DevigMethod
 
 LOG_DESTINATION = "stdout"
 
+# Versión de la LÓGICA de selección y stake (no de la configuración). Súbela a mano cuando cambie
+# cómo se eligen o dimensionan los picks (p. ej. `_select` o `_blocked` en services/scan.py) aunque
+# no cambie ningún parámetro; los cambios técnicos (logs, avisos, almacenamiento) no la suben. Se
+# guarda en cada scan y forma parte de la versión de la estrategia (services/versions.py).
+STRATEGY_LOGIC_VERSION = 1
+
 CommaList = Annotated[tuple[str, ...], NoDecode]
 
 
@@ -169,6 +175,9 @@ class Settings(BaseSettings):
 
     def snapshot(self) -> dict[str, object]:
         """Configuración usada en una ejecución, para guardarla en `runs`. Nunca lleva la clave."""
-        return self.model_dump(
-            mode="json", exclude={"odds_api_key", "telegram_bot_token", "telegram_chat_id"}
-        )
+        return {
+            **self.model_dump(
+                mode="json", exclude={"odds_api_key", "telegram_bot_token", "telegram_chat_id"}
+            ),
+            "strategy_logic_version": STRATEGY_LOGIC_VERSION,
+        }
