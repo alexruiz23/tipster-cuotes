@@ -6,6 +6,7 @@ casas .es; el horizonte de 4 días no se puede probar (una sola foto de cuotas p
 """
 
 import math
+import random
 from collections import defaultdict
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -101,3 +102,30 @@ def summarize(bets: Sequence[Bet]) -> Summary:
     mean = sum(clv) / n
     se = math.sqrt(sum((x - mean) ** 2 for x in clv) / (n - 1) / n) if n > 1 else None
     return Summary(n, sum(b.profit for b in bets) / n, mean, se, sum(b.won for b in bets) / n)
+
+
+def block_bootstrap(
+    bets: Sequence[Bet], *, n_boot: int = 2000, seed: int = 1
+) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    """Intervalos del 95 % para el CLV medio y el ROI, remuestreando SEMANAS enteras.
+
+    Los picks de una misma semana comparten mercado y noticias: tratarlos como independientes
+    (el error típico de `summarize`) estrecha demasiado el intervalo. Devuelve None con menos de
+    dos semanas."""
+    weeks: dict[tuple[str, tuple[int, int]], list[Bet]] = defaultdict(list)
+    for bet in bets:
+        weeks[(bet.season, bet.week)].append(bet)
+    blocks = list(weeks.values())
+    if len(blocks) < 2:
+        return None
+    rng = random.Random(seed)
+    clvs: list[float] = []
+    rois: list[float] = []
+    for _ in range(n_boot):
+        sample = [b for block in rng.choices(blocks, k=len(blocks)) for b in block]
+        clvs.append(sum(b.clv for b in sample) / len(sample))
+        rois.append(sum(b.profit for b in sample) / len(sample))
+    clvs.sort()
+    rois.sort()
+    lo, hi = int(0.025 * n_boot), int(0.975 * n_boot) - 1
+    return (clvs[lo], clvs[hi]), (rois[lo], rois[hi])

@@ -11,7 +11,7 @@ from tipster.backtest.football_data import (
     read_csv,
     season_code,
 )
-from tipster.backtest.simulate import Strategy, run, summarize
+from tipster.backtest.simulate import Bet, Strategy, block_bootstrap, run, summarize
 
 HEADER = "Div,Date,HomeTeam,AwayTeam,FTR,{cols}\n"
 
@@ -120,3 +120,32 @@ def test_load_dir_recorre_temporadas(tmp_path: Path) -> None:
     _csv(tmp_path, "2526", cols, ["E0,16/08/2025,A,B,H,2,3.5,4,2,3.5,4,2,3.5,4"])
     matches, report = load_dir(tmp_path)
     assert len(matches) == 1 and report.kept == 1
+
+
+def _bet(clv: float, week: int, won: bool = False) -> Bet:
+    return Bet("2526", (2025, week), 2.0, 0.05, won, clv, longshot=False)
+
+
+def test_bootstrap_por_semanas_contiene_la_media_y_es_reproducible() -> None:
+    bets = [_bet(0.02 * (i % 5 - 2), week=i // 3, won=i % 2 == 0) for i in range(60)]
+    ci = block_bootstrap(bets)
+    assert ci is not None
+    (c0, c1), (r0, r1) = ci
+    mean = sum(b.clv for b in bets) / len(bets)
+    assert c0 <= mean <= c1
+    assert r0 <= 0.0 <= r1  # mitad aciertos a cuota 2: ROI medio 0
+    assert block_bootstrap(bets) == ci  # semilla fija
+
+
+def test_bootstrap_con_semanas_correlacionadas_es_mas_ancho_que_el_error_tipico() -> None:
+    # cada semana entera es buena o mala: los picks no son independientes
+    bets = [_bet(0.05 if w % 2 else -0.05, week=w) for w in range(20) for _ in range(10)]
+    ci = block_bootstrap(bets)
+    s = summarize(bets)
+    assert ci is not None and s.clv_se is not None
+    (c0, c1), _ = ci
+    assert (c1 - c0) > 2 * 1.96 * s.clv_se  # el error típico ingenuo se queda corto
+
+
+def test_bootstrap_con_una_sola_semana_no_da_intervalo() -> None:
+    assert block_bootstrap([_bet(0.01, week=1), _bet(0.02, week=1)]) is None

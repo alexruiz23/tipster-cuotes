@@ -10,7 +10,7 @@ from itertools import product
 from typing import Any
 
 from tipster.backtest.football_data import LoadReport, Match
-from tipster.backtest.simulate import Bet, Strategy, Summary, run, summarize
+from tipster.backtest.simulate import Bet, Strategy, Summary, block_bootstrap, run, summarize
 
 GRID = {
     "longshot_odds": (3.0, 4.0, 5.0),
@@ -35,6 +35,17 @@ def _fmt(s: Summary) -> str:
     return (
         f"{s.n:5d} picks · CLV {s.clv * 100:+.2f} %{se} · ROI {s.roi * 100:+.1f} % · "  # type: ignore[operator]
         f"acierto {s.hit * 100:.0f} %"  # type: ignore[operator]
+    )
+
+
+def _ci(bets: Sequence[Bet]) -> str:
+    ci = block_bootstrap(bets)
+    if ci is None:
+        return "IC 95 %: muestra insuficiente"
+    (c0, c1), (r0, r1) = ci
+    return (
+        f"IC 95 % (bootstrap por semanas): CLV [{c0 * 100:+.2f}, {c1 * 100:+.2f}] % · "
+        f"ROI [{r0 * 100:+.1f}, {r1 * 100:+.1f}] %"
     )
 
 
@@ -78,9 +89,13 @@ def report(matches: Sequence[Match], loaded: LoadReport, current: Strategy) -> s
         out.append(f"    entrenamiento: {_fmt(summarize(_by(bets, train)))}")
         out.append(f"    validación:    {_fmt(summarize(_by(bets, valid)))}")
     bets = run(matches, current)
-    for label, flag in (("principal", False), ("improbable", True)):
-        tier = [b for b in bets if b.longshot is flag]
+    for label, tier in (
+        ("total", bets),
+        ("principal", [b for b in bets if not b.longshot]),
+        ("improbable", [b for b in bets if b.longshot]),
+    ):
         out.append(f"  nivel {label}: {_fmt(summarize(tier))}")
+        out.append(f"    {_ci(tier)}")
     out += ["", "## CLV por temporada (configuración actual, b365)"]
     for season in train + valid:
         out.append(f"  {season}: {_fmt(summarize(_by(bets, [season])))}")
