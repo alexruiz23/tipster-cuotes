@@ -94,6 +94,7 @@ class OpenPick:
     has_closing: bool = False
     closing_captured_at: datetime | None = None
     taken_price: float | None = None  # cuota real registrada con `tipster take`
+    devig_method: str | None = None  # método con el que se eligió; el CLV se mide con el mismo
 
     @property
     def effective_price(self) -> float:
@@ -129,7 +130,7 @@ class SqliteTrackingRepository:
             "SELECT p.id, q.event_id, e.competition_id, e.home_team, e.away_team, e.kickoff_utc,"
             " q.market_id, q.selection, q.price, p.stake,"
             " p.closing_captured_at IS NOT NULL AS has_closing, p.closing_captured_at,"
-            " p.taken_price FROM picks p"
+            " p.taken_price, p.devig_method FROM picks p"
             " JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id"
             " WHERE p.status = 'abierto' ORDER BY e.kickoff_utc, p.id"
         ).fetchall()
@@ -148,6 +149,7 @@ class SqliteTrackingRepository:
                 bool(r["has_closing"]),
                 None if r["closing_captured_at"] is None else from_iso(r["closing_captured_at"]),
                 r["taken_price"],
+                r["devig_method"],
             )
             for r in rows
         ]

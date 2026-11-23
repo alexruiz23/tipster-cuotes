@@ -131,6 +131,17 @@ def test_close_captura_el_cierre_y_calcula_el_clv_con_la_cuota_justa(
     ]
 
 
+def test_el_clv_usa_el_metodo_de_devig_con_el_que_se_eligio_el_pick(
+    conn: sqlite3.Connection,
+) -> None:
+    pick_id = _open(conn, "e1", minutes_to_kickoff=10)
+    conn.execute("UPDATE picks SET devig_method = 'multiplicativo' WHERE id = ?", (pick_id,))
+    # la configuración vigente es Shin, pero el pick se eligió con multiplicativo
+    _close(conn, FakeOdds(_pinnacle("e1", (1.80, 3.60, 3.60))), devig_method="shin")
+    row = conn.execute("SELECT closing_fair_odds FROM picks WHERE id = ?", (pick_id,)).fetchone()
+    assert row["closing_fair_odds"] == pytest.approx(2.0)  # multiplicativo; Shin daría otra cosa
+
+
 def test_close_ignora_lo_que_no_esta_en_la_ventana_sin_gastar_creditos(
     conn: sqlite3.Connection,
 ) -> None:

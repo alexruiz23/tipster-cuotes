@@ -21,6 +21,7 @@ from tipster.errors import (
     ProviderError,
     QuotaExhaustedError,
 )
+from tipster.pricing.devig import DevigMethod
 from tipster.providers.base import OddsProvider, OddsRequest, RequestRecord
 from tipster.storage.repositories import RunRepository
 from tipster.storage.tracking import OpenPick, SqliteTrackingRepository
@@ -113,7 +114,10 @@ class CloseService:
         raw = tuple(prices[name].price for name in selections)
         index = selections.index(pick.selection)
         quote = prices[pick.selection]
-        fair = closing_fair_odds(raw, index, s.devig_method)
+        # El mismo método con el que se eligió el pick (guardado en la base), no el vigente: si
+        # algún día cambia la configuración, los picks viejos no se miden con otra vara.
+        method = DevigMethod(pick.devig_method) if pick.devig_method else s.devig_method
+        fair = closing_fair_odds(raw, index, method)
         # El `last_update` de The Odds API es una marca de la captura, no del cambio de precio (ADR
         # 012), así que la fiabilidad solo mira que se capturó en la ventana previa al inicio.
         before_kickoff = pick.kickoff - quote.captured_at
