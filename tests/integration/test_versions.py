@@ -9,7 +9,7 @@ import pytest
 
 from tests.integration.test_tracking import _make_pick
 from tipster.config import STRATEGY_LOGIC_VERSION, Settings
-from tipster.services.versions import strategy_hash, version_lines, version_stats
+from tipster.services.versions import shadow_lines, strategy_hash, version_lines, version_stats
 from tipster.storage.db import connect
 
 OLD = {"devig_method": "multiplicativo", "max_odds": 15.0, "db_path": "a.sqlite"}
@@ -109,3 +109,29 @@ def test_sin_picks_de_la_configuracion_vigente_lo_dice(conn: sqlite3.Connection)
     _pick(conn, "a", OLD, "2026-11-06T11:00:00+00:00")
     text = "\n".join(version_lines(conn, NEW))
     assert "Estrategia vigente: aún no ha generado ningún pick." in text
+
+
+def _shadow(conn: sqlite3.Connection, event: str, reason: str, clv: float, config=NEW) -> None:  # type: ignore[no-untyped-def]
+    _pick(conn, event, config, "2026-11-24T11:00:00+00:00", stake=None, clv=clv)
+    conn.execute(
+        "UPDATE picks SET reasons_json = ? WHERE quote_id IN"
+        " (SELECT id FROM odds_quotes WHERE event_id = ?)",
+        (json.dumps(["VALUE", reason]), event),
+    )
+
+
+def test_la_sombra_agrupa_el_clv_de_los_descartes_por_motivo(conn: sqlite3.Connection) -> None:
+    _shadow(conn, "a", "partido a más de 4 días: fuera del horizonte", 0.04)
+    _shadow(conn, "b", "partido a más de 4 días: fuera del horizonte", -0.02)
+    _shadow(conn, "c", "cuota 9.5 por encima de max_odds 8.0", -0.10)
+    _shadow(conn, "d", "cuota 9.5 por encima de max_odds 8.0", 0.5, config=OLD)  # otra versión
+    _pick(conn, "e", NEW, "2026-11-24T11:00:00+00:00", clv=0.3)  # con stake: no es sombra
+    text = "\n".join(shadow_lines(conn, NEW))
+    assert "3 con cierre" in text
+    assert "a más de 4 días: CLV +1.0 % en 2 (1 > 0)" in text
+    assert "cuota demasiado alta: CLV -10.0 % en 1 (0 > 0)" in text
+
+
+def test_shadow_closing_no_crea_una_version_nueva() -> None:
+    snapshot = Settings(_env_file=None).snapshot()
+    assert strategy_hash(snapshot) == strategy_hash({**snapshot, "shadow_closing": False})

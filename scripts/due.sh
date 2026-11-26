@@ -7,6 +7,8 @@ cd "$(dirname "$0")/.."
 DB="${TIPSTER_DB_PATH:-data/tipster.sqlite}"
 WINDOW="${TIPSTER_CLOSING_WINDOW_MINUTES:-15}"
 REFRESH="${TIPSTER_CLOSING_REFRESH_MINUTES:-5}"
+# sombra (BACKLOG 60): también los VALUE sin stake, salvo TIPSTER_SHADOW_CLOSING=false
+case "${TIPSTER_SHADOW_CLOSING:-true}" in false|False|0) SHADOW=0 ;; *) SHADOW=1 ;; esac
 job="${1:?uso: due.sh scan|settle|close}"
 [ "${FORCE:-}" = "$job" ] && exit 0
 
@@ -36,7 +38,7 @@ case "$job" in
   close) # captura pendiente en la ventana, o cierre perdido sin avisar (como close.sh)
     due="$(q "
       SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id
-      WHERE p.status = 'abierto' AND p.stake > 0
+      WHERE p.status = 'abierto' AND (p.stake > 0 OR ($SHADOW = 1 AND p.label = 'VALUE'))
         AND (p.closing_captured_at IS NULL
              OR (julianday(e.kickoff_utc) - julianday(p.closing_captured_at)) * 1440 > $REFRESH)
         AND e.kickoff_utc >= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now')

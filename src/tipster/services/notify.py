@@ -42,7 +42,7 @@ _DISCARD_CONTAINS = (
 )
 
 
-def _discard_label(reason: str) -> str:
+def discard_label(reason: str) -> str:
     """Motivo corto, para el resumen, de por qué un VALUE no llevó stake."""
     if m := re.search(r"a más de (\d+) días", reason):
         return f"a más de {m.group(1)} días"
@@ -66,7 +66,7 @@ def discards_text(conn: sqlite3.Connection, run: int | None) -> str:
     if not rows:
         return ""
     reasons = Counter(
-        _discard_label((json.loads(r[0]) or [""])[-1]) for r in rows
+        discard_label((json.loads(r[0]) or [""])[-1]) for r in rows
     )  # el último motivo es el de la decisión de stake
     detail = " · ".join(f"{n} {label}" for label, n in reasons.most_common())
     return f"{len(rows)} con valor sin stake: {detail}"

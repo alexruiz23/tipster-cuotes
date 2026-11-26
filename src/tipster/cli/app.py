@@ -47,7 +47,7 @@ from tipster.services.notify import (
 from tipster.services.scan import ScanService
 from tipster.services.settle import SettleService
 from tipster.services.status import paper_status, status_lines
-from tipster.services.versions import version_lines
+from tipster.services.versions import shadow_lines, version_lines
 from tipster.storage.db import MEMORY, connect, from_iso
 from tipster.storage.sqlite import (
     SqliteEventRepository,
@@ -564,7 +564,10 @@ def status_command(
     try:
         SqliteBankrollRepository(conn, _now).ensure_initial(settings.bankroll_initial)
         st = paper_status(conn, _now(), settings.longshot_odds)
-        versions = version_lines(conn, settings.snapshot())
+        versions = [
+            *version_lines(conn, settings.snapshot()),
+            *shadow_lines(conn, settings.snapshot()),
+        ]
     finally:
         conn.close()
     for line in [*status_lines(st, ZoneInfo(settings.timezone)), *versions]:
@@ -663,6 +666,7 @@ def notify_command(  # noqa: PLR0912, PLR0917 (una opción por tipo de aviso)
                         [
                             *status_lines(paper_status(conn, _now(), settings.longshot_odds), tz),
                             *version_lines(conn, settings.snapshot()),
+                            *shadow_lines(conn, settings.snapshot()),
                         ]
                     ),
                     [],

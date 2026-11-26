@@ -156,12 +156,28 @@ def test_close_salta_picks_sin_stake_o_con_cierre_ya_capturado(conn: sqlite3.Con
     _open(conn, "sin-stake", minutes_to_kickoff=10, stake=None)
     done = _open(conn, "hecho", minutes_to_kickoff=3)  # captura a menos de 5 min del inicio
     provider = FakeOdds(_pinnacle("hecho", (1.80, 3.60, 3.60)))
-    assert _close(conn, provider).captured == [done]
+    assert _close(conn, provider, shadow_closing=False).captured == [done]
     again = FakeOdds(_pinnacle("hecho", (1.50, 4.00, 6.00)))
-    assert _close(conn, again).captured == [] and again.requests == []  # idempotente
+    assert _close(conn, again, shadow_closing=False).captured == []
+    assert again.requests == []  # idempotente
     assert (
         conn.execute("SELECT closing_odds FROM picks WHERE id = ?", (done,)).fetchone()[0] == 1.80
     )
+
+
+def test_la_sombra_captura_el_cierre_de_los_value_sin_stake(conn: sqlite3.Connection) -> None:
+    shadow = _open(conn, "e1", minutes_to_kickoff=10, stake=None)
+    error = _open(conn, "e2", minutes_to_kickoff=10, stake=None)
+    conn.execute("UPDATE picks SET label = 'POSIBLE_ERROR' WHERE id = ?", (error,))
+    quotes = _pinnacle("e1", (1.80, 3.60, 3.60)) + _pinnacle("e2", (1.80, 3.60, 3.60))
+    result = _close(conn, FakeOdds(quotes))
+    assert result.captured == [shadow]  # un posible error de cuota no es un descarte
+    row = conn.execute("SELECT clv, stake FROM picks WHERE id = ?", (shadow,)).fetchone()
+    assert row["clv"] == pytest.approx(0.10) and row["stake"] is None
+    # y no ensucia nada de lo que se mide con stake
+    from tipster.storage.tracking import SqliteTrackingRepository as Repo  # noqa: PLC0415
+
+    assert Repo(conn).clv_values() == []
 
 
 def test_el_last_update_no_decide_la_fiabilidad_si_se_captura_en_la_ventana(

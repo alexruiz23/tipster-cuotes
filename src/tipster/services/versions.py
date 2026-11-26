@@ -35,6 +35,7 @@ OPERATIONAL = frozenset(
         "max_credits_per_run",
         "min_request_interval_s",
         "raw_dir",
+        "shadow_closing",
         "timezone",
     }
 )
@@ -170,4 +171,37 @@ def version_lines(
     )
     if live.clv_taken:
         lines.append(f"  con cuota real: {_clv_text(live.taken_weeks)}")
+    return lines
+
+
+def shadow_lines(conn: sqlite3.Connection, current: Mapping[str, object]) -> list[str]:
+    """CLV de los VALUE SIN stake de la estrategia vigente, por motivo de descarte (BACKLOG 60).
+
+    Responde a «¿las reglas descartan valor real?» sin apostar nada. Si un mismo pronóstico se
+    detectó en varios scans, cuenta una vez, con el motivo del último."""
+    from tipster.services.notify import discard_label  # noqa: PLC0415 (evita import circular)
+
+    current_hash = strategy_hash(current)
+    rows = conn.execute(
+        "SELECT r.settings_json, p.reasons_json, p.clv, q.event_id, q.market_id, q.selection"
+        " FROM picks p JOIN runs r ON r.id = p.run_id JOIN odds_quotes q ON q.id = p.quote_id"
+        " WHERE p.label = 'VALUE' AND (p.stake IS NULL OR p.stake = 0)"
+        " AND p.closing_reliable = 1 AND p.clv IS NOT NULL ORDER BY p.id"
+    ).fetchall()
+    latest: dict[tuple[str, str, str], tuple[str, float]] = {}
+    for settings_json, reasons_json, clv, event, market, selection in rows:
+        if strategy_hash(json.loads(settings_json)) != current_hash:
+            continue
+        reason = (json.loads(reasons_json) or [""])[-1]
+        latest[(event, market, selection)] = (discard_label(reason), float(clv))
+    if not latest:
+        return ["Descartes (sombra, sin stake): aún sin cierres capturados."]
+    by_reason: dict[str, list[float]] = {}
+    for label, value in latest.values():
+        by_reason.setdefault(label, []).append(value)
+    lines = [f"Descartes (sombra, sin stake) de la vigente: {len(latest)} con cierre"]
+    for label, values in sorted(by_reason.items(), key=lambda kv: -len(kv[1])):
+        mean = sum(values) / len(values)
+        positive = sum(v > 0 for v in values)
+        lines.append(f"  {label}: CLV {mean * 100:+.1f} % en {len(values)} ({positive} > 0)")
     return lines

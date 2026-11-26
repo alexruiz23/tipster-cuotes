@@ -67,7 +67,9 @@ class CloseService:
         due = [
             p
             for p in self._tracking.open_picks()
-            if p.stake
+            # con stake, o VALUE sin stake si la sombra está activa (BACKLOG 60): misma petición
+            # por competición, así que solo cuesta créditos cuando no había ya un pick con stake
+            if (p.stake or (s.shadow_closing and p.label == "VALUE"))
             and timedelta(0) <= p.kickoff - now <= window
             # sin cierre aún, o cierre guardado a más de `refresh` del inicio: se repite para
             # quedarse con el más cercano al inicio

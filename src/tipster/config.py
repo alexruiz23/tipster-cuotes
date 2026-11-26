@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     # Sesgo favorito-longshot (ADR 012): el EV de una cuota larga está sobrestimado. 8,0 desde el
     # 2026-11-14 (antes 15,0): ver «Cambio del 2026-11-14» en el ADR 012
     max_odds: float = Field(default=8.0, gt=1)
+    # Medición, no estrategia (BACKLOG 60): captura también el cierre de los VALUE sin stake para
+    # saber si los descartes tenían valor real. Gasta créditos de `close`; False lo apaga.
+    shadow_closing: bool = True
     # Dos niveles (ADR 014). Principal: cuota ≤ longshot_odds con EV ≥ ev_min. Improbable: cuota
     # mayor, hasta max_odds, que exige EV ≥ longshot_ev_min y con un tope de picks abiertos a la vez
     longshot_odds: float = Field(default=4.0, gt=1)

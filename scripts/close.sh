@@ -10,6 +10,8 @@ export PATH="/usr/bin:/bin"
 DB="${TIPSTER_DB_PATH:-data/tipster.sqlite}"
 WINDOW="${TIPSTER_CLOSING_WINDOW_MINUTES:-15}"
 REFRESH="${TIPSTER_CLOSING_REFRESH_MINUTES:-5}"
+# sombra (BACKLOG 60): también los VALUE sin stake, salvo TIPSTER_SHADOW_CLOSING=false
+case "${TIPSTER_SHADOW_CLOSING:-true}" in false|False|0) SHADOW=0 ;; *) SHADOW=1 ;; esac
 
 # Cierres perdidos: pick con stake cuyo partido empezó hace más de 5 min sin CLV y sin avisar. Es una
 # comprobación local (0 créditos); solo si hay alguno se lanza `notify --alerts`.
@@ -26,7 +28,7 @@ fi
 
 due=$(sqlite3 "$DB" "
   SELECT COUNT(*) FROM picks p JOIN odds_quotes q ON q.id = p.quote_id JOIN events e ON e.id = q.event_id
-  WHERE p.status = 'abierto' AND p.stake > 0
+  WHERE p.status = 'abierto' AND (p.stake > 0 OR ($SHADOW = 1 AND p.label = 'VALUE'))
     AND (p.closing_captured_at IS NULL
          OR (julianday(e.kickoff_utc) - julianday(p.closing_captured_at)) * 1440 > $REFRESH)
     AND e.kickoff_utc >= strftime('%Y-%m-%dT%H:%M:%S+00:00', 'now')

@@ -166,3 +166,24 @@ def test_el_settle_no_se_repite_si_ya_termino_bien_hoy_y_si_fallo_se_reintenta(
     assert _run(env, "settle")
     _add_run(env, "settle", "ok")
     assert not _run(env, "settle")
+
+
+def _pick_about_to_start(env: dict[str, str], *, stake: float | None) -> None:
+    conn = connect(env["TIPSTER_DB_PATH"])
+    _open(conn, "e1", minutes_to_kickoff=0, stake=stake)
+    kickoff = datetime.now(UTC) + timedelta(minutes=10)  # dentro de la ventana de 15 min
+    conn.execute("UPDATE events SET kickoff_utc = ?", (kickoff.isoformat(timespec="seconds"),))
+    conn.commit()
+    conn.close()
+
+
+def test_el_close_toca_con_un_pick_con_stake_a_punto_de_empezar(env: dict[str, str]) -> None:
+    _pick_about_to_start(env, stake=1.0)
+    assert _run(env, "close")
+    assert _run(env, "close", TIPSTER_SHADOW_CLOSING="false")
+
+
+def test_la_sombra_tambien_dispara_el_close_con_un_value_sin_stake(env: dict[str, str]) -> None:
+    _pick_about_to_start(env, stake=None)
+    assert _run(env, "close")  # sombra activa por defecto (BACKLOG 60)
+    assert not _run(env, "close", TIPSTER_SHADOW_CLOSING="false")
